@@ -517,6 +517,14 @@ async function run() {
 		console.error('同步失败：', err.message || err);
 		process.exitCode = 1;
 	}
+
+console.log("程序运行完毕，3 秒后自动退出...");
+
+// 等待 3 秒后退出
+setTimeout(() => {
+  console.log("程序退出");
+  process.exit();
+}, 10000); // 10000 毫秒 = 10 秒
 }
 
 run().catch(err => {

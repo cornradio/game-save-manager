@@ -1,0 +1,18 @@
+{
+  "name": "game-save-manager",
+  "version": "1.0.0",
+  "description": "游戏存档双端同步与备份（Windows 双端，支持 SFTP 与 scp/pscp）",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "fs-extra": "^11.2.0",
+    "inquirer": "^9.3.7",
+    "ssh2-sftp-client": "^9.1.0",
+    "which": "^4.0.0"
+  }
+}
+

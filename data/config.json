@@ -1,0 +1,21 @@
+{
+  "games": [
+    {
+      "name": "mc dungeons",
+      "localPath": "C:\\Users\\kasus\\Saved Games\\Mojang Studios\\Dungeons",
+      "remoteFullPath": "C:/Users/rober/Saved Games/Mojang Studios/Dungeons"
+    },
+    {
+      "name": "aaatest",
+      "localPath": "C:\\Users\\kasus\\Downloads\\aaa",
+      "remoteFullPath": "C:/Users/rober/Downloads/aaa"
+    }
+  ],
+  "remote": {
+    "host": "192.168.31.204",
+    "port": 22,
+    "user": "rogallyx",
+    "password": "kali"
+  },
+  "preferScpTool": "auto"
+}

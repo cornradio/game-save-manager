@@ -13,6 +13,31 @@ const DATA_DIR = path.join(ROOT, 'data');
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 const BACKUP_DIR = path.join(ROOT, 'backups');
 
+function parseArgs(argv = []) {
+	const result = {};
+	for (let i = 0; i < argv.length; i += 1) {
+		const token = argv[i];
+		if (!token.startsWith('--')) continue;
+		const stripped = token.slice(2);
+		if (!stripped) continue;
+		const eqIndex = stripped.indexOf('=');
+		if (eqIndex !== -1) {
+			const key = stripped.slice(0, eqIndex);
+			const value = stripped.slice(eqIndex + 1);
+			result[key] = value;
+			continue;
+		}
+		const next = argv[i + 1];
+		if (next && !next.startsWith('--')) {
+			result[stripped] = next;
+			i += 1;
+		} else {
+			result[stripped] = true;
+		}
+	}
+	return result;
+}
+
 function ensureDirs() {
 	if (!fs.existsSync(DATA_DIR)) fse.mkdirpSync(DATA_DIR);
 	if (!fs.existsSync(BACKUP_DIR)) fse.mkdirpSync(BACKUP_DIR);
@@ -57,11 +82,18 @@ function toSftpPath(remotePath) {
 	return remotePathCandidates(remotePath)[0] || remotePath;
 }
 
-async function pickOrCreateGame(cfg) {
+async function pickOrCreateGame(cfg, preselectName) {
+	if (preselectName) {
+		const matched = cfg.games.find(g => g.name === preselectName);
+		if (!matched) {
+			throw new Error(`未找到名为 "${preselectName}" 的游戏，请先通过交互界面创建。`);
+		}
+		console.log(`已通过命令行参数选择游戏：${matched.name}`);
+		return matched;
+	}
 	if (cfg.games.length === 0) {
 		console.log('尚未配置任何游戏，将为你创建一个。');
-		const created = await createGame(cfg);
-		return await ensureGameRemotePath(created, cfg);
+		return await createGame(cfg);
 	}
 	const choices = cfg.games.map((g, idx) => ({ name: `${g.name}  - ${g.localPath}`, value: idx }));
 	choices.push({ name: '新建游戏', value: -1 });
@@ -69,11 +101,9 @@ async function pickOrCreateGame(cfg) {
 		{ type: 'list', name: 'idx', message: '选择一个游戏：', choices }
 	]);
 	if (idx === -1) {
-		const created = await createGame(cfg);
-		return await ensureGameRemotePath(created, cfg);
+		return await createGame(cfg);
 	}
-	const game = cfg.games[idx];
-	return await ensureGameRemotePath(game, cfg);
+	return cfg.games[idx];
 }
 
 async function createGame(cfg) {
@@ -364,6 +394,13 @@ async function backupBoth(game, remote) {
 	await backupRemote(game, remote, remoteDest);
 }
 
+async function backupLocalOnly(game) {
+	const root = path.join(BACKUP_DIR, `${game.name}_${timestamp()}`);
+	const localDest = path.join(root, 'local');
+	await backupLocal(game, localDest);
+	console.log(`本地存档备份已完成（仅备份模式）：${localDest}`);
+}
+
 async function testSftpConnection(game, remote) {
 	console.log(`正在测试 SFTP 连接：${remote.user}@${remote.host}:${remote.port || 22}`);
 	try {
@@ -388,23 +425,79 @@ async function testSftpConnection(game, remote) {
 	}
 }
 
-async function run() {
-	ensureDirs();
-	const cfg = loadConfig();
-	const game = await pickOrCreateGame(cfg);
-	const remote = await ensureRemote(cfg);
-	await testSftpConnection(game, remote);
+function normalizeDirectionInput(input) {
+	if (!input) return null;
+	const normalized = String(input).toLowerCase();
+	switch (normalized) {
+		case 'local2remote':
+		case 'push':
+		case 'upload':
+		case 'l2r':
+			return 'push';
+		case 'remote2local':
+		case 'pull':
+		case 'download':
+		case 'r2l':
+			return 'pull';
+		case 'backup':
+		case 'backuplocal':
+		case 'localbackup':
+		case 'backup-only':
+		case 'backup_local':
+			return 'backupLocal';
+		default:
+			return null;
+	}
+}
+
+function directionLabel(direction) {
+	switch (direction) {
+		case 'push': return '本地 -> 远程';
+		case 'pull': return '远程 -> 本地';
+		case 'backupLocal': return '仅备份本地存档';
+		default: return direction;
+	}
+}
+
+async function resolveDirection(argDirection) {
+	if (argDirection !== undefined) {
+		const mappedFromArg = normalizeDirectionInput(argDirection);
+		if (!mappedFromArg) {
+			throw new Error(`无法识别 --direction 参数 "${argDirection}"，可选值：local2remote、remote2local、backup`);
+		}
+		console.log(`已通过命令行参数选择操作：${directionLabel(mappedFromArg)}`);
+		return mappedFromArg;
+	}
 	const { direction } = await inquirer.prompt([
 		{
-			type: 'list', name: 'direction', message: '选择同步方向：',
+			type: 'list',
+			name: 'direction',
+			message: '选择操作：',
 			choices: [
 				{ name: '本地 -> 远程（用本地覆盖远程）', value: 'push' },
-				{ name: '远程 -> 本地（用远程覆盖本地）', value: 'pull' }
+				{ name: '远程 -> 本地（用远程覆盖本地）', value: 'pull' },
+				{ name: '仅备份本地存档', value: 'backupLocal' }
 			]
 		}
 	]);
+	return direction;
+}
+
+async function run() {
+	ensureDirs();
+	const args = parseArgs(process.argv.slice(2));
+	const cfg = loadConfig();
+	const game = await pickOrCreateGame(cfg, args.game);
+	const direction = await resolveDirection(args.direction);
+	if (direction === 'backupLocal') {
+		await backupLocalOnly(game);
+		return;
+	}
+	const remote = await ensureRemote(cfg);
+	const ensuredGame = await ensureGameRemotePath(game, cfg);
+	await testSftpConnection(ensuredGame, remote);
 	console.log('开始备份本地与远程...');
-	await backupBoth(game, remote);
+	await backupBoth(ensuredGame, remote);
 	const prefer = cfg.preferScpTool || 'auto';
 	const canUseScp = (() => {
 		const d = detectScpTools();
@@ -412,12 +505,12 @@ async function run() {
 	})();
 	try {
 		if (direction === 'push') {
-			if (prefer === 'scp' && canUseScp) await syncLocalToRemote_SCP(game, remote);
-			else await syncLocalToRemote_SFTP(game, remote);
+			if (prefer === 'scp' && canUseScp) await syncLocalToRemote_SCP(ensuredGame, remote);
+			else await syncLocalToRemote_SFTP(ensuredGame, remote);
 			console.log('同步完成（本地 -> 远程）。');
 		} else {
-			if (prefer === 'scp' && canUseScp) await syncRemoteToLocal_SCP(game, remote);
-			else await syncRemoteToLocal_SFTP(game, remote);
+			if (prefer === 'scp' && canUseScp) await syncRemoteToLocal_SCP(ensuredGame, remote);
+			else await syncRemoteToLocal_SFTP(ensuredGame, remote);
 			console.log('同步完成（远程 -> 本地）。');
 		}
 	} catch (err) {

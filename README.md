@@ -31,38 +31,19 @@ npm start
 
 配置文件保存在 `data/config.json`。
 
-## 使用方式（交互模式）
+## 使用方式
 
-每次执行 `npm start` 后，按照提示完成以下步骤：
-1. 选择或新建游戏，并填写本地存档路径（目录会自动创建）。
-2. 为该游戏填写远程存档完整路径（例如 `C:/Users/foo/Saved Games/<Game>`）。
-3. 选择操作：
-   - 本地 -> 远程（用本地覆盖远程，远程会被清空后再上传）
-   - 远程 -> 本地（用远程覆盖本地，本地会被清空后再下载）
-   - 仅备份本地存档（在 `backups/` 目录生成一份本地备份，不访问远程）
-4. 若选择双向同步，会继续提示填写/确认远程 SSH 信息（host、port、user、password），并自动测试连接。
+执行 `npm start` 后，按照提示完成：
+1. 选择或新建游戏。
+2. （首次）新建游戏需要填写远程/本地存档完整路径（例如 `C:/Users/foo/Saved Games/<Game>`）（可能需要百度）。
+3. （首次）按照提示填写ssh的ip、用户、密码信息：
+4. 选择同步方向（不用担心资料丢失，覆盖之前会先备份远程和本地的数据）
+   - 本地 -> 远程（本地覆盖远程）
+   - 远程 -> 本地（远程覆盖本地）
+   - 仅备份本地存档（在 `backups/` 目录生成一份本地备份）
 
-## 命令行参数
-
-无需完全依赖交互式流程，可通过命令行参数直接指定游戏与操作：
-
-- `--game <游戏名称>`：按名称选择已配置的游戏。
-- `--direction <操作>`：可填 `local2remote`、`remote2local`、`backup`（分别对应“本地 -> 远程”“远程 -> 本地”“仅备份本地”）。
-
-示例（使用 npm 时记得带上 `--` 传递参数）：
-
-```bash
-npm start -- --game "mc dungeons" --direction local2remote
-```
-
-如果只想做本地备份：
-
-```bash
-npm start -- --game "mc dungeons" --direction backup
-```
-
-未通过参数指定时，会自动进入交互式选择。
-
+> 填写好的内容会被存储到"\data\config.json" 也可直接修改配置文件来新增游戏条目
+> 
 ## 备份策略
 
 每次同步前会在 `backups/<游戏名>_<时间戳>/` 下生成：
@@ -71,12 +52,29 @@ npm start -- --game "mc dungeons" --direction backup
 
 若远程目录不存在，仍会创建一个空目录作为备份记录；仅备份本地时，只生成 `local/`。
 
+## 命令行参数
+用纯命令行+参数的方式创建快捷方式可以无需交互进行存档同步和备份：
+
+- `--game <游戏名称>`：按名称选择已配置的游戏。
+- `--direction <方向>`：可填 `local2remote`、`remote2local`、`backup`（分别对应“本地 -> 远程”“远程 -> 本地”“仅备份本地”）。
+
+示例：
+
+```bash
+npm start -- --game "mc dungeons" --direction local2remote
+
+npm start -- --game "mc dungeons" --direction backup
+```
+
+> 未通过参数指定时，会自动进入交互式选择。
+
+
 ## 远程路径书写
 
 - Windows 远程建议使用正斜杠：例如 `C:/Users/foo/Saved Games`
-- 每个游戏都需要提供远程存档的完整路径，可在创建游戏时输入，也可事后在 `data/config.json` 内调整游戏条目的 `remoteFullPath` 字段。
+- linux 未进行过测试，我的steamdeck买了 3300￥。
 
-## 选择 scp/pscp
+## 选择 scp/pscp （高级）
 
 - 默认：SFTP（推荐）。无需外部命令，兼容 Windows 远程（OpenSSH Server）。
 - 强制 scp：需系统存在 `pscp`（PuTTY）或 `scp`。

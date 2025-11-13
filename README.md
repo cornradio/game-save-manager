@@ -1,4 +1,5 @@
 # 游戏存档双端同步工具（Windows 双端）
+<img width="1214" height="427" alt="image" src="https://github.com/user-attachments/assets/1ff67cf3-5687-44a6-84bb-114814a6f639" />
 
 一个基于 Node.js 的交互式 CLI 工具，支持：
 - 本地与远程（SSH）之间的双向同步：本地 -> 远程、远程 -> 本地

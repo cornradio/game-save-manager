@@ -8,18 +8,23 @@
   - 默认使用 SFTP（内置库，无需外部命令，适合 Windows 双端）
   - 可选强制使用 scp/pscp（若系统已安装 `pscp` 或 `scp`）
 
-## 安装
+## node 环境安装
+程序使用nodejs 可以使用 nvm 安装
+https://github.com/coreybutler/nvm-windows
+
+```
+nvm install 20.11.1
+```
+WINDOWS 装完后要重启才能用
+
+## game-save-manager安装
 
 ```bash
 npm install
+（安装依赖）
 npm start
+（启动game-save-manager）
 ```
-
-首次运行会提示你：
-1) 新建游戏并填写本地存档路径（本地目录会被自动创建）
-2) 为该游戏填写远程存档完整路径（例如 `C:/Users/foo/Saved Games/<Game>`）
-3) 填写远程 SSH 信息（host、port、user、password）
-4) 选择同步方向（本地覆盖远程 / 远程覆盖本地）
 
 配置文件保存在 `data/config.json`。
 
@@ -45,10 +50,6 @@ npm start
 
 你可在首次运行时选择“强制 scp/pscp”，或手动编辑 `data/config.json` 的 `preferScpTool` 为 `"scp"`。
 
-## 连接测试与日志
-
-- 在同步开始前会先进行一次 SFTP 连通性测试，并打印当前远程目录候选路径。若测试失败会直接终止，避免误删。
-- 可通过命令行输出查看同步步骤：备份、本地/远程路径、SFTP/pscp 调度等；当启用 scp/pscp 时，程序会在执行前原样打印完整命令（含密码等敏感参数）。
 
 ## 注意
 
@@ -59,7 +60,9 @@ npm start
 - 请确保远程主机已启用 SSH/SFTP 服务。
 
 
-## win掌机安装openssh步骤
+## 额外提示 ：win掌机安装openssh步骤
+我发现windows家庭版（掌机默认系统）是不带openssh的，需要手工安装。
+
 https://github.com/PowerShell/Win32-OpenSSH/releases
 
 等它下载并安装完，然后再执行命令开放 22 port：

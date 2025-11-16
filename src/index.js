@@ -61,6 +61,30 @@ function timestamp() {
 	return dayjs().format('YYYYMMDD_HHmmss');
 }
 
+async function openConfigFile() {
+    console.log(`即将打开配置文件：${CONFIG_PATH}`);
+    try {
+        const child = spawn('code', [CONFIG_PATH], { detached: true, stdio: 'ignore', shell: true });
+        child.unref();
+        console.log('配置文件已在 VSCode 中打开。');
+    } catch (spawnError) {
+        console.error(`无法自动打开 VSCode。请手动打开文件：${CONFIG_PATH}`, spawnError);
+    }
+}
+
+async function openBackupDir() {
+    console.log(`即将打开备份文件所在目录：${BACKUP_DIR}`);
+    try {
+        const platform = os.platform();
+        const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
+        const child = spawn(command, [BACKUP_DIR], { detached: true, stdio: 'ignore' });
+        child.unref();
+        console.log('目录已在文件浏览器中打开。');
+    } catch (spawnError) {
+        console.error(`无法自动打开目录。请手动打开：${BACKUP_DIR}`, spawnError);
+    }
+}
+
 function getRemoteDir(game, remote) {
 	if (game.remoteFullPath && typeof game.remoteFullPath === 'string' && game.remoteFullPath.trim().length > 0) {
 		return game.remoteFullPath.trim().replace(/\\/g, '/');
@@ -91,19 +115,35 @@ async function pickOrCreateGame(cfg, preselectName) {
 		console.log(`已通过命令行参数选择游戏：${matched.name}`);
 		return matched;
 	}
-	if (cfg.games.length === 0) {
-		console.log('尚未配置任何游戏，将为你创建一个。');
-		return await createGame(cfg);
-	}
+
 	const choices = cfg.games.map((g, idx) => ({ name: `${g.name}  - ${g.localPath}`, value: idx }));
+	if (cfg.games.length > 0) {
+		choices.push(new inquirer.Separator());
+	}
 	choices.push({ name: '新建游戏', value: -1 });
-	const { idx } = await inquirer.prompt([
-		{ type: 'list', name: 'idx', message: '选择一个游戏：', choices }
+	choices.push({ name: '打开存档备份文件夹', value: 'openBackupDir' });
+	choices.push({ name: '编辑配置文件', value: 'editConfig' });
+	choices.push({ name: '退出程序', value: 'exit' });
+
+	const { selection } = await inquirer.prompt([
+		{ type: 'list', name: 'selection', message: '选择一个游戏或操作：', choices, pageSize: 15 }
 	]);
-	if (idx === -1) {
+
+	if (selection === 'editConfig') {
+		await openConfigFile();
+		return null;
+	}
+	if (selection === 'openBackupDir') {
+		await openBackupDir();
+		return null;
+	}
+	if (selection === -1) {
 		return await createGame(cfg);
 	}
-	return cfg.games[idx];
+	if (selection === 'exit') {
+	  		console.log('程序退出。');
+				  		process.exit(0);
+	}
 }
 
 async function createGame(cfg) {
@@ -401,28 +441,51 @@ async function backupLocalOnly(game) {
 	console.log(`本地存档备份已完成（仅备份模式）：${localDest}`);
 }
 
+async function reconfigureRemote(cfg) {
+    console.log('请重新输入 SSH 连接信息：');
+    const ans = await inquirer.prompt([
+        { type: 'input', name: 'host', message: '远程 SSH 地址（IP 或域名）：', default: cfg.remote?.host, validate: v => v ? true : '必填' },
+        { type: 'number', name: 'port', message: 'SSH 端口：', default: cfg.remote?.port ?? 22 },
+        { type: 'input', name: 'user', message: '远程用户名：', default: cfg.remote?.user, validate: v => v ? true : '必填' },
+        { type: 'password', name: 'password', message: '远程密码：', mask: '*' }
+    ]);
+    cfg.remote = { ...cfg.remote, ...ans };
+    saveConfig(cfg);
+    console.log('配置已更新。');
+}
+
+async function handleSshError(err, cfg) {
+	console.error('\nSFTP 测试失败，请检查主机/账号/密码：', err.message || err);
+	const { reconfigure } = await inquirer.prompt([{
+		type: 'confirm',
+		name: 'reconfigure',
+		message: '是否现在手动重新输入连接信息？',
+		default: true
+	}]);
+
+	if (reconfigure) {
+		await reconfigureRemote(cfg);
+	}
+}
+
 async function testSftpConnection(game, remote) {
 	console.log(`正在测试 SFTP 连接：${remote.user}@${remote.host}:${remote.port || 22}`);
-	try {
-		await withSFTP(remote, async (sftp) => {
-			console.log('SFTP 连通性测试成功。');
-			const remoteDir = getRemoteDir(game, remote);
-			const variants = remotePathCandidates(remoteDir);
-			console.log(`准备访问的远程目录：${variants.join(' | ')}`);
-			const { exists, error } = await sftpExists(sftp, remoteDir);
-			if (exists) {
-				console.log('检测到远程目录存在，将尝试读取内容。');
-			} else {
-				console.log('远程目录暂不存在，在后续同步时会自动创建。');
-				if (error) {
-					console.log(`远程 stat 错误信息：${error.message || String(error)}`);
-				}
+	// Throws on error, to be caught by run()
+	await withSFTP(remote, async (sftp) => {
+		console.log('SFTP 连通性测试成功。');
+		const remoteDir = getRemoteDir(game, remote);
+		const variants = remotePathCandidates(remoteDir);
+		console.log(`准备访问的远程目录：${variants.join(' | ')}`);
+		const { exists, error } = await sftpExists(sftp, remoteDir);
+		if (exists) {
+			console.log('检测到远程目录存在，将尝试读取内容。');
+		} else {
+			console.log('远程目录暂不存在，在后续同步时会自动创建。');
+			if (error) {
+				console.log(`远程 stat 错误信息：${error.message || String(error)}`);
 			}
-		});
-	} catch (err) {
-		console.error('SFTP 测试失败，请检查主机/账号/密码：', err.message || err);
-		throw err;
-	}
+		}
+	});
 }
 
 function normalizeDirectionInput(input) {
@@ -486,50 +549,72 @@ async function resolveDirection(argDirection) {
 async function run() {
 	ensureDirs();
 	const args = parseArgs(process.argv.slice(2));
-	const cfg = loadConfig();
-	const game = await pickOrCreateGame(cfg, args.game);
-	const direction = await resolveDirection(args.direction);
-	if (direction === 'backupLocal') {
-		await backupLocalOnly(game);
-		return;
-	}
-	const remote = await ensureRemote(cfg);
-	const ensuredGame = await ensureGameRemotePath(game, cfg);
-	await testSftpConnection(ensuredGame, remote);
-	console.log('开始备份本地与远程...');
-	await backupBoth(ensuredGame, remote);
-	const prefer = cfg.preferScpTool || 'auto';
-	const canUseScp = (() => {
-		const d = detectScpTools();
-		return Boolean(d.scpPath || d.pscpPath);
-	})();
-	try {
-		if (direction === 'push') {
-			if (prefer === 'scp' && canUseScp) await syncLocalToRemote_SCP(ensuredGame, remote);
-			else await syncLocalToRemote_SFTP(ensuredGame, remote);
-			console.log('同步完成（本地 -> 远程）。');
-		} else {
-			if (prefer === 'scp' && canUseScp) await syncRemoteToLocal_SCP(ensuredGame, remote);
-			else await syncRemoteToLocal_SFTP(ensuredGame, remote);
-			console.log('同步完成（远程 -> 本地）。');
+
+	while (true) {
+		const cfg = loadConfig();
+		const game = await pickOrCreateGame(cfg, args.game);
+
+		if (!game) {
+			console.log('\n返回主菜单...');
+			delete args.game;
+			delete args.direction;
+			continue;
 		}
-	} catch (err) {
-		console.error('同步失败：', err.message || err);
-		process.exitCode = 1;
+
+		const direction = await resolveDirection(args.direction);
+
+		if (direction === 'backupLocal') {
+			await backupLocalOnly(game);
+		} else {
+			const remote = await ensureRemote(cfg);
+			const ensuredGame = await ensureGameRemotePath(game, cfg);
+
+			try {
+				await testSftpConnection(ensuredGame, remote);
+				console.log('开始备份本地与远程...');
+				await backupBoth(ensuredGame, remote);
+				const prefer = cfg.preferScpTool || 'auto';
+				const canUseScp = (() => {
+					const d = detectScpTools();
+					return Boolean(d.scpPath || d.pscpPath);
+				})();
+				if (direction === 'push') {
+					if (prefer === 'scp' && canUseScp) await syncLocalToRemote_SCP(ensuredGame, remote);
+					else await syncLocalToRemote_SFTP(ensuredGame, remote);
+					console.log('同步完成（本地 -> 远程）。');
+				} else {
+					if (prefer === 'scp' && canUseScp) await syncRemoteToLocal_SCP(ensuredGame, remote);
+					else await syncRemoteToLocal_SFTP(ensuredGame, remote);
+					console.log('同步完成（远程 -> 本地）。');
+				}
+			} catch (err) {
+				await handleSshError(err, cfg);
+				process.exitCode = 1;
+			}
+		}
+
+		console.log("\n操作完成。");
+		const { confirmExit } = await inquirer.prompt([{
+			type: 'confirm',
+			name: 'confirmExit',
+			message: '是否退出程序？ (y/n)',
+			default: true,
+		}]);
+
+		if (confirmExit) {
+			break;
+		}
+
+		// Clear args for next loop to be interactive
+		delete args.game;
+		delete args.direction;
 	}
 
-console.log("程序运行完毕，3 秒后自动退出...");
-
-// 等待 3 秒后退出
-setTimeout(() => {
-  console.log("程序退出");
-  process.exit();
-}, 10000); // 10000 毫秒 = 10 秒
+	console.log("程序退出。");
+	process.exit(0);
 }
 
 run().catch(err => {
 	console.error(err);
 	process.exit(1);
 });
-
-

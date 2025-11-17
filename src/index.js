@@ -144,6 +144,7 @@ async function pickOrCreateGame(cfg, preselectName) {
 	  		console.log('程序退出。');
 				  		process.exit(0);
 	}
+	return cfg.games[selection];
 }
 
 async function createGame(cfg) {

@@ -1,8 +1,11 @@
 # 游戏存档双端同步工具（Windows 双端）
-> 至于为什么需要存档同步，因为我玩的游戏是学习版的，不是steam版的没有云同步。。。
-> <img width="987" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
+> 专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
+>
+> 当然，也可以用来做本地游戏存档备份。
+>
 
-<img width="1214" height="427" alt="image" src="https://github.com/user-attachments/assets/1ff67cf3-5687-44a6-84bb-114814a6f639" />
+ <img width="987" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
+
 
 一个基于 Node.js 的交互式 CLI 工具，支持：
 - 本地与远程（SSH）之间的双向同步：本地 -> 远程、远程 -> 本地

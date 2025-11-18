@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Save Manager</title>
+    <style>
+        body { font-family: sans-serif; background-color: #f4f4f4; color: #333; padding: 2em; }
+        h1 { color: #1a1a1a; }
+        #game-list { list-style-type: none; padding: 0; }
+        .game-item { background-color: #fff; border: 1px solid #ddd; padding: 1em; margin-bottom: 1em; border-radius: 5px; }
+        .game-item h2 { margin-top: 0; }
+        .game-item p { margin: 0.5em 0; font-family: monospace; background: #eee; padding: 0.5em; border-radius: 3px; }
+        .actions button { margin-right: 10px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 3px; cursor: pointer; background-color: #e9e9e9; }
+        .actions button:hover { background-color: #ddd; }
+        #log-container { margin-top: 1em; padding: 1em; background-color: #2d2d2d; color: #f1f1f1; border: 1px solid #444; border-radius: 5px; height: 200px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; }
+        .log-success { color: #81c784; }
+        .log-error { color: #e57373; }
+        .log-info { color: #64b5f6; }
+        .game-info { margin-top: 1em; }
+        .header-actions { float: right; }
+    </style>
+</head>
+<body>
+    <div class="header-actions">
+        <button onclick="openBackupsFolder()">查看所有备份</button>
+    </div>
+    <h1>Game Save Manager - Games</h1>
+    <div id="log-container"></div>
+    <ul id="game-list">
+        <!-- Games will be loaded here -->
+    </ul>
+
+    <script>
+        const logContainer = document.getElementById('log-container');
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        async function openBackupsFolder() {
+            log('Requesting to open backups folder...');
+            try {
+                const response = await fetch('/api/open-backups-folder', { method: 'POST' });
+                if (!response.ok) throw new Error('Server responded with an error.');
+                log('Backups folder should be open now.', 'success');
+            } catch (error) {
+                log(`Failed to open backups folder: ${error.message}`, 'error');
+            }
+        }
+
+        async function openFolder(gameName) {
+            log(`Requesting to open folder for '${gameName}'...`);
+            try {
+                const response = await fetch('/api/open-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: gameName }),
+                });
+                if (!response.ok) throw new Error('Server responded with an error.');
+                log(`Folder for '${gameName}' should be open now.`, 'success');
+            } catch (error) {
+                log(`Failed to open folder: ${error.message}`, 'error');
+            }
+        }
+
+        async function performAction(gameName, direction) {
+            log(`Performing '${direction}' for '${gameName}'...`);
+            try {
+                const response = await fetch('/api/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: gameName, direction: direction }),
+                });
+                const result = await response.json();
+                if (!response.ok) {
+                    throw new Error(result.message || 'Unknown error');
+                }
+                log(result.message, 'success');
+                fetchGames(); // Refresh list to update backup count
+            } catch (error) {
+                console.error('Action failed:', error);
+                log(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function fetchGames() {
+            try {
+                const response = await fetch('/api/games');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const games = await response.json();
+                const gameList = document.getElementById('game-list');
+                gameList.innerHTML = ''; // Clear list
+
+                if (games.length === 0) {
+                    gameList.innerHTML = '<li>No games configured yet.</li>';
+                    return;
+                }
+
+                for (const game of games) {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'game-item';
+                    listItem.id = `game-${game.name.replace(/\s+/g, '-')}`;
+                    listItem.innerHTML = `
+                        <h2>${game.name}</h2>
+                        <p><strong>Local Path:</strong> ${game.localPath}</p>
+                        <p><strong>Remote Path:</strong> ${game.remoteFullPath || 'Not set'}</p>
+                        <div class="game-info">
+                            <strong>Backups:</strong> <span class="backup-count">Loading...</span>
+                        </div>
+                        <div class="actions">
+                            <button onclick="performAction('${game.name}', 'push')">本地 -> 远程</button>
+                            <button onclick="performAction('${game.name}', 'pull')">远程 -> 本地</button>
+                            <button onclick="performAction('${game.name}', 'backupLocal')">仅备份本地</button>
+                            <button onclick="openFolder('${game.name}')">查看本地存档</button>
+                        </div>
+                    `;
+                    gameList.appendChild(listItem);
+
+                    // Fetch backup count for each game
+                    fetch(`/api/backups/${encodeURIComponent(game.name)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            const countSpan = listItem.querySelector('.backup-count');
+                            if (countSpan) countSpan.textContent = data.count;
+                        })
+                        .catch(() => {
+                            const countSpan = listItem.querySelector('.backup-count');
+                            if (countSpan) countSpan.textContent = 'Error';
+                        });
+                }
+            } catch (error) {
+                log(`Failed to fetch games: ${error.message}`, 'error');
+                const gameList = document.getElementById('game-list');
+                gameList.innerHTML = '<li>Error loading game data. Is the server running?</li>';
+            }
+        }
+        
+        log('Welcome! Page loaded.');
+        fetchGames();
+    </script>
+</body>
+</html>

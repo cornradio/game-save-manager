@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import which from 'which';
 import { spawn } from 'child_process';
 import SFTPClient from 'ssh2-sftp-client';
+import http from 'http';
 
 const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, 'data');
@@ -547,9 +548,151 @@ async function resolveDirection(argDirection) {
 	return direction;
 }
 
+async function startWebServer() {
+    const port = 8080;
+    const server = http.createServer(async (req, res) => {
+        if (req.url === '/' && req.method === 'GET') {
+            const htmlPath = path.join(ROOT, 'src', 'index.html');
+            fs.readFile(htmlPath, (err, data) => {
+                if (err) {
+                    res.writeHead(500, { 'Content-Type': 'text/plain' });
+                    res.end('Error loading index.html');
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                res.end(data);
+            });
+        } else if (req.url === '/api/games' && req.method === 'GET') {
+            try {
+                const cfg = loadConfig();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(cfg.games || []));
+            } catch (error) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to load config' }));
+            }
+        } else if (req.url.startsWith('/api/backups/') && req.method === 'GET') {
+            try {
+                const gameName = decodeURIComponent(req.url.split('/')[3]);
+                if (!fs.existsSync(BACKUP_DIR)) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ count: 0 }));
+                    return;
+                }
+                const allBackups = fs.readdirSync(BACKUP_DIR);
+                const gameBackups = allBackups.filter(dir => dir.startsWith(`${gameName}_`));
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ count: gameBackups.length }));
+            } catch (error) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Failed to count backups' }));
+            }
+        } else if (req.url === '/api/open-backups-folder' && req.method === 'POST') {
+            try {
+                const platform = os.platform();
+                const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
+                spawn(command, [BACKUP_DIR], { detached: true, stdio: 'ignore' }).unref();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ message: 'Opened backups folder.' }));
+            } catch (error) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ message: error.message }));
+            }
+        } else if (req.url === '/api/open-folder' && req.method === 'POST') {
+             let body = '';
+            req.on('data', chunk => { body += chunk.toString(); });
+            req.on('end', async () => {
+                try {
+                    const { game: gameName } = JSON.parse(body);
+                    const cfg = loadConfig();
+                    const game = cfg.games.find(g => g.name === gameName);
+                    if (!game) throw new Error(`Game '${gameName}' not found.`);
+
+                    const platform = os.platform();
+                    const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
+                    spawn(command, [game.localPath], { detached: true, stdio: 'ignore' }).unref();
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ message: `Opened folder for ${gameName}` }));
+                } catch (error) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ message: error.message }));
+                }
+            });
+        } else if (req.url === '/api/sync' && req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => {
+                body += chunk.toString();
+            });
+            req.on('end', async () => {
+                try {
+                    const { game: gameName, direction } = JSON.parse(body);
+                    const cfg = loadConfig();
+                    const game = cfg.games.find(g => g.name === gameName);
+
+                    if (!game) {
+                        throw new Error(`Game '${gameName}' not found.`);
+                    }
+
+                    const normalizedDir = normalizeDirectionInput(direction);
+                    if (!normalizedDir) {
+                        throw new Error(`Invalid direction: ${direction}`);
+                    }
+                    
+                    console.log(`[Web API] Received action: ${normalizedDir} for ${game.name}`);
+
+                    if (normalizedDir === 'backupLocal') {
+                        await backupLocalOnly(game);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ message: `Successfully backed up ${game.name} locally.` }));
+                    } else {
+                        const remote = cfg.remote;
+                        if (!remote || !remote.host || !remote.user) {
+                            throw new Error('Remote configuration is incomplete.');
+                        }
+                        await backupBoth(game, remote);
+                        
+                        if (normalizedDir === 'push') {
+                            await syncLocalToRemote_SFTP(game, remote);
+                        } else if (normalizedDir === 'pull') {
+                            await syncRemoteToLocal_SFTP(game, remote);
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ message: `Sync '${normalizedDir}' for ${game.name} completed.` }));
+                    }
+                } catch (error) {
+                    console.error('[Web API] Error:', error);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ message: error.message }));
+                }
+            });
+        } else {
+            res.writeHead(404, { 'Content-Type': 'text/plain' });
+            res.end('Not Found');
+        }
+    });
+
+    server.listen(port, () => {
+        const url = `http://localhost:${port}`;
+        console.log(`Web server running at ${url}`);
+        console.log('Press Ctrl+C to stop the server.');
+        try {
+            const platform = os.platform();
+            const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
+            spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
+        } catch (e) {
+            console.error('Could not automatically open browser.', e);
+        }
+    });
+}
+
 async function run() {
 	ensureDirs();
 	const args = parseArgs(process.argv.slice(2));
+
+	if (args.web) {
+		return startWebServer();
+	}
 
 	while (true) {
 		const cfg = loadConfig();

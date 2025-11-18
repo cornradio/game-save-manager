@@ -2,9 +2,11 @@
 > 专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
 >
 > 当然，也可以用来做本地游戏存档备份。
->
+> 他有命令行和web界面可选。
 
- <img width="987" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
+ <img width="687" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
+ <img width="1334" height="853" alt="image" src="https://github.com/user-attachments/assets/963b5bbc-2e78-4637-bdd0-332514f5d40d" />
+
 
 
 一个基于 Node.js 的交互式 CLI 工具，支持：

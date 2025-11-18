@@ -8,7 +8,7 @@
 <style>
     :root {
         --bg: #2f2f2f;
-        --panel: rgba(20,20,20,0.7);
+        --panel: #565961b3;
         --border: rgba(255,255,255,0.06);
         --accent: #3ea6ff;
         --text-main: #e6e6e6;
@@ -107,20 +107,15 @@
 
     /* 日志：专业黑框终端风，不霓虹 */
     #log-container {
-        margin-top: 1.6em;
         position: fixed;
         top: 70vh;
-        height: 20vh;
-        width: 85vw;
-        padding: 1.2em;
-        border-radius: var(--radius);
-        background: #0f0f0f;
-        border: 1px solid var(--border);
-        font-family: monospace;
+        width: 100%;
+        height: 28vh;
         overflow-y: auto;
+        margin: auto;
+        font-family: monospace;
         white-space: pre-wrap;
         color: var(--text-soft);
-        box-shadow: 0 0 10px black;
     }
     .game-info{
        float:right;
@@ -138,7 +133,8 @@
 <body>
 
 <div class="header-actions" style="float:right;">
-    <button onclick="openBackupsFolder()">查看所有备份</button>
+    <button onclick="testlog()" style="background-color: transparent; border: none;">.</button>
+    <button onclick="openBackupsFolder()">查看备份</button>
 </div>
 
 <h1>Game Save Manager</h1>
@@ -147,6 +143,11 @@
 <div id="log-container"></div>
 
 <script>
+function testlog(){
+    log('This is a test log message.', 'info');
+    log('This is a success message.', 'success');
+    log('This is an error message.', 'error');
+}
 const logContainer = document.getElementById('log-container');
 
 function log(message, type = 'info') {

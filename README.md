@@ -1,4 +1,4 @@
-<img width="414" height="301" alt="Group 72" src="https://github.com/user-attachments/assets/32fa5833-54ef-4ea0-9f23-e5d358e6eeaa" />
+<img width="414" height="301" alt="Group 72 (1)" src="https://github.com/user-attachments/assets/dc8c7779-cea4-4367-a791-48888174dcf7" />
 
 
 # 游戏存档双端同步工具（Windows 双端）

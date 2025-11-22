@@ -444,6 +444,11 @@ async function writeBackupLog(root, game, type, filename = 'backup.log') {
 }
 
 async function backupBoth(game, remote, direction) {
+	if (game.nobackup) {
+		console.log(`\n[配置] 游戏 "${game.name}" 已设置 nobackup=true，跳过备份步骤，直接进行同步。`);
+		return;
+	}
+
 	const root = path.join(BACKUP_DIR, `${game.name}_${timestamp()}`);
 	const localDest = path.join(root, 'local');
 	const remoteDest = path.join(root, 'remote');

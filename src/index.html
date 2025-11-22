@@ -432,16 +432,16 @@
                     <p title="${g.remoteFullPath || 'Not set'}"><strong>Remote:</strong> ${g.remoteFullPath || 'Not set'}</p>
                 </div>
                 <div class="actions">
-                    <button onclick="performAction('${g.name}','push')">本地 → 远程</button>
-                    <button onclick="performAction('${g.name}','pull')">远程 → 本地</button>
-                    <button onclick="performAction('${g.name}','backupLocal')">仅备份本地</button>
+                    <button onclick="performAction('${g.name}','push')">🏠 → 🌐</button>
+                    <button onclick="performAction('${g.name}','pull')">🌐 → 🏠</button>
+                    <button onclick="performAction('${g.name}','backupLocal')">🏠🗘</button>
                 </div>
             `;
                     list.appendChild(item);
 
                     fetch(`/api/backups/${encodeURIComponent(g.name)}`)
                         .then(r => r.json())
-                        .then(d => { item.querySelector('.backup-count-badge').textContent = `${d.count} backups`; })
+                        .then(d => { item.querySelector('.backup-count-badge').textContent = `${d.count} `; })
                         .catch(() => { item.querySelector('.backup-count-badge').textContent = 'Error'; });
                 }
 

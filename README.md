@@ -1,3 +1,6 @@
+<img width="414" height="301" alt="Group 72" src="https://github.com/user-attachments/assets/32fa5833-54ef-4ea0-9f23-e5d358e6eeaa" />
+
+
 # 游戏存档双端同步工具（Windows 双端）
 > 专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
 >

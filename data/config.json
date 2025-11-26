@@ -6,7 +6,12 @@
       "remoteFullPath": "/C:/Users/rober/Saved Games/Mojang Studios/Dungeons"
     },
     {
-      "name": "da sync",
+      "name": "☢️辐射4",
+      "localPath": "C:\\Users\\kasus\\Documents\\My Games\\Fallout4\\Saves",
+      "remoteFullPath": "/C:/Users/rober/Documents/My Games/Fallout4/Saves"
+    },
+    {
+      "name": "SFTP-sync",
       "localPath": "C:\\Users\\kasus\\Downloads\\da",
       "remoteFullPath": "/C:/Users/rober/Downloads/da",
       "nobackup": true

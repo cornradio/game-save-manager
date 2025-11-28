@@ -691,6 +691,8 @@ async function startWebServer() {
 						}
 						res.writeHead(200, { 'Content-Type': 'application/json' });
 						res.end(JSON.stringify({ message: `Sync '${normalizedDir}' for ${game.name} completed.` }));
+						console.log(`Sync '${normalizedDir}' for ${game.name} completed.`);
+						console.log(`-----`);
 					}
 				} catch (error) {
 					console.error('[Web API] Error:', error);

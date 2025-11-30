@@ -630,7 +630,19 @@ async function startWebServer() {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ message: error.message }));
 			}
-		} else if (req.url === '/api/open-folder' && req.method === 'POST') {
+		} else if (req.url === '/api/open-config' && req.method === 'POST') {
+			try {
+				const platform = os.platform();
+				const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
+				spawn(command, [CONFIG_PATH], { detached: true, stdio: 'ignore' }).unref();
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: 'Opened backups folder.' }));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: error.message }));
+			}
+		}
+		 else if (req.url === '/api/open-folder' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
 			req.on('end', async () => {
@@ -706,7 +718,8 @@ async function startWebServer() {
 		}
 	});
 
-	server.listen(port, () => {
+	try {
+		server.listen(port, () => {
 		const url = `http://localhost:${port}`;
 		console.log(`Web server running at ${url}`);
 		console.log('Press Ctrl+C to stop the server.');
@@ -714,10 +727,15 @@ async function startWebServer() {
 			const platform = os.platform();
 			const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
 			spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
-		} catch (e) {
-			console.error('Could not automatically open browser.', e);
-		}
-	});
+			} 
+		catch (e) {
+				console.error('Could not automatically open browser.', e);
+			}
+		});
+	}catch (err) {
+		console.error('Failed to start web server:', err);
+	}
+
 }
 
 async function run() {

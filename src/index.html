@@ -269,6 +269,7 @@
 
     <div class="header-actions" style="float:right;">
         <button onclick="openBackupsFolder()">查看备份</button>
+        <button onclick="openConfig()">修改配置</button>
     </div>
 
     <h1>🕹️ GSM 游戏存档管家</h1>
@@ -318,6 +319,15 @@
                 const r = await fetch('/api/open-backups-folder', { method: 'POST' });
                 if (!r.ok) throw new Error('Server error');
                 showToast('Backups folder opened.', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+        async function openConfig() {
+            try {
+                const r = await fetch('/api/open-config', { method: 'POST' });
+                if (!r.ok) throw new Error('Server error');
+                showToast('Config file opened.', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }

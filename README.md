@@ -8,7 +8,8 @@
 > 他有命令行和web界面可选。
 
  <img width="687" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
-  <img width="687" alt="image" src="https://github.com/user-attachments/assets/94fbfe44-6e63-4dd2-9ceb-dc1edc46fc06" />
+<img width="2054" height="1476" alt="image" src="https://github.com/user-attachments/assets/cb42f6fc-fa38-46ca-b8a9-2461a6dc24b9" />
+
 
 
 

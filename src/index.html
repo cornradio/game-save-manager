@@ -187,63 +187,6 @@
             word-break: break-all;
         }
 
-        /* 备份列表 */
-        .backup-list {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-
-        .backup-item {
-            background: rgba(20, 20, 20, 0.5);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 1em;
-            margin-bottom: 0.8em;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .backup-item-info {
-            flex: 1;
-        }
-
-        .backup-item-info .backup-time {
-            font-size: 0.9em;
-            color: var(--text-main);
-            margin-bottom: 0.3em;
-        }
-
-        .backup-item-info .backup-size {
-            font-size: 0.85em;
-            color: var(--text-soft);
-        }
-
-        .backup-item-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .backup-item-actions button {
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: #151515;
-            color: var(--text-main);
-            cursor: pointer;
-            transition: 0.2s ease;
-            font-size: 0.85em;
-        }
-
-        .backup-item-actions button:hover {
-            border-color: var(--accent);
-            color: var(--accent);
-        }
-
-        .backup-item-actions button.danger:hover {
-            border-color: #ff6b6b;
-            color: #ff6b6b;
-        }
 
         /* 按钮组 */
         .button-group {
@@ -315,6 +258,149 @@
 
         .empty-state p {
             margin: 0.5em 0;
+        }
+
+        /* 自定义滚动条 - 黑绿配色 */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2f2f2f;
+            border-radius: 5px;
+            border: 1px solid #1a1a1a;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent);
+        }
+
+        /* 基础信息样式 */
+        .info-section h1 {
+            margin: 0 0 1em 0;
+            font-size: 2rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .info-section .path-item {
+            margin: 0.8em 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .info-section .path-label {
+            font-size: 0.85em;
+            color: var(--text-soft);
+            min-width: 100px;
+        }
+
+        .info-section .path-value {
+            font-family: monospace;
+            font-size: 0.85em;
+            color: var(--text-soft);
+            flex: 1;
+        }
+
+        .info-section .path-button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.85em;
+            white-space: nowrap;
+        }
+
+        .info-section .path-button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* 备份表格样式 */
+        .backup-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1em;
+        }
+
+        .backup-table thead {
+            background: rgba(20, 20, 20, 0.5);
+        }
+
+        .backup-table th {
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 0.85em;
+            color: var(--text-soft);
+            border-bottom: 1px solid var(--border);
+            font-weight: 600;
+        }
+
+        .backup-table td {
+            padding: 10px 12px;
+            font-size: 0.85em;
+            color: var(--text-main);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .backup-table tbody tr {
+            transition: 0.2s ease;
+        }
+
+        .backup-table tbody tr:hover {
+            background: rgba(84, 250, 6, 0.05);
+        }
+
+        .backup-table .backup-time {
+            font-family: monospace;
+            color: var(--text-main);
+        }
+
+        .backup-table .backup-size {
+            color: var(--text-soft);
+            font-family: monospace;
+        }
+
+        .backup-table .backup-type {
+            color: var(--text-soft);
+            font-size: 0.8em;
+        }
+
+        .backup-table .backup-actions {
+            display: flex;
+            gap: 6px;
+        }
+
+        .backup-table .backup-actions button {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        .backup-table .backup-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .backup-table .backup-actions button.danger:hover {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
         }
 
         /* Toast Notification */
@@ -526,7 +612,7 @@
                 return;
             }
 
-            header.textContent = selectedGame.name;
+            header.textContent = '';
 
             // 获取备份列表
             let backups = [];
@@ -567,26 +653,26 @@
 
             body.innerHTML = `
                 <!-- 板块1: 基础信息 -->
-                <div class="section">
-                    <h3>基础信息</h3>
-                    <div class="info-item">
-                        <label>游戏名称</label>
-                        <div class="value">${selectedGame.name}</div>
+                <div class="section info-section">
+                    <h1>${selectedGame.name}</h1>
+                    <div class="path-item">
+                        <span class="path-label">本地路径</span>
+                        <span class="path-value">${selectedGame.localPath}</span>
+                        <button class="path-button" onclick="openLocalFolder()">打开文件夹</button>
                     </div>
-                    <div class="info-item">
-                        <label>本地存档路径</label>
-                        <div class="value">${selectedGame.localPath}</div>
-                    </div>
-                    <div class="info-item">
-                        <label>远程存档路径</label>
-                        <div class="value">${selectedGame.remoteFullPath || '未设置'}</div>
+                    <div class="path-item">
+                        <span class="path-label">远程路径</span>
+                        <span class="path-value">${selectedGame.remoteFullPath || '未设置'}</span>
                     </div>
                 </div>
 
-                <!-- 板块2: 备份列表 -->
+                
+                <!-- 板块2: 远程同步及本地备份 -->
                 <div class="section">
-                    <h3>备份管理</h3>
+                    <h3>远程同步及本地备份</h3>
                     <div class="button-group">
+                        <button onclick="performSync('push')">推送到远程 🏠 → 🌐</button>
+                        <button onclick="performSync('pull')">下拉到本地 🌐 → 🏠</button>
                         <button class="primary" onclick="createBackup()">新建本地备份</button>
                     </div>
                     <div class="schedule-control">
@@ -600,33 +686,46 @@
                             <option value="60" ${currentSchedule == 60 ? 'selected' : ''}>每 1 小时</option>
                         </select>
                     </div>
-                    <div class="backup-list" id="backup-list">
+                </div>
+
+                <!-- 板块3: 备份列表 -->
+                <div class="section">
+                    <h3>备份管理</h3>
+                    <div style="overflow-x: auto; margin-top: 1em;">
                         ${backups.length === 0 
                             ? '<div class="empty-state"><p>暂无备份</p></div>'
-                            : backups.map(backup => `
-                                <div class="backup-item">
-                                    <div class="backup-item-info">
-                                        <div class="backup-time">${formatTime(backup.time)}</div>
-                                        <div class="backup-size">${formatSize(backup.size)} ${backup.hasLocal ? '(本地)' : ''} ${backup.hasRemote ? '(远程)' : ''}</div>
-                                    </div>
-                                    <div class="backup-item-actions">
-                                        <button onclick="restoreBackup('${backup.name}')">恢复到此存档</button>
-                                        <button class="danger" onclick="deleteBackup('${backup.name}')">删除</button>
-                                    </div>
-                                </div>
-                            `).join('')
+                            : `
+                            <table class="backup-table">
+                                <thead>
+                                    <tr>
+                                        <th>备份时间</th>
+                                        <th>大小</th>
+                                        <th>类型</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${backups.map(backup => `
+                                        <tr>
+                                            <td class="backup-time">${formatTime(backup.time)}</td>
+                                            <td class="backup-size">${formatSize(backup.size)}</td>
+                                            <td class="backup-type">${backup.hasLocal ? '本地' : ''}${backup.hasLocal && backup.hasRemote ? ' + ' : ''}${backup.hasRemote ? '远程' : ''}</td>
+                                            <td>
+                                                <div class="backup-actions">
+                                                    <button onclick="openBackupFolder('${backup.name}')">打开文件夹</button>
+                                                    <button onclick="restoreBackup('${backup.name}')">回滚到此存档</button>
+                                                    <button class="danger" onclick="deleteBackup('${backup.name}')">删除</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            `
                         }
                     </div>
                 </div>
 
-                <!-- 板块3: 远程功能 -->
-                <div class="section">
-                    <h3>远程同步</h3>
-                    <div class="button-group">
-                        <button onclick="performSync('push')">推送到远程 🏠 → 🌐</button>
-                        <button onclick="performSync('pull')">下拉到本地 🌐 → 🏠</button>
-                    </div>
-                </div>
             `;
         }
 
@@ -669,19 +768,19 @@
             }
         }
 
-        // 恢复备份
+        // 回滚备份
         async function restoreBackup(backupName) {
             if (!selectedGame) return;
-            if (!confirm(`确定要恢复备份 "${backupName}" 吗？当前本地存档将被覆盖！`)) return;
+            if (!confirm(`确定要回滚到备份 "${backupName}" 吗？当前本地存档将被覆盖！`)) return;
             
-            showToast('正在恢复备份...', 'info');
+            showToast('正在回滚备份...', 'info');
             try {
                 const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/${encodeURIComponent(backupName)}/restore`, {
                     method: 'POST'
                 });
                 const result = await r.json();
-                if (!r.ok) throw new Error(result.error || '恢复失败');
-                showToast('备份已恢复', 'success');
+                if (!r.ok) throw new Error(result.error || '回滚失败');
+                showToast('备份已回滚', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }
@@ -724,6 +823,41 @@
                 if (!r.ok) throw new Error(result.message || '同步失败');
                 showToast(result.message || '同步成功', 'success');
                 await fetchGames();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 打开本地文件夹
+        async function openLocalFolder() {
+            if (!selectedGame) return;
+            try {
+                const r = await fetch('/api/open-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: selectedGame.name })
+                });
+                if (!r.ok) throw new Error('打开文件夹失败');
+                showToast('已打开本地文件夹', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 打开备份文件夹
+        async function openBackupFolder(backupName) {
+            if (!selectedGame) return;
+            try {
+                const r = await fetch('/api/open-backup-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        game: selectedGame.name,
+                        backup: backupName 
+                    })
+                });
+                if (!r.ok) throw new Error('打开备份文件夹失败');
+                showToast('已打开备份文件夹', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }

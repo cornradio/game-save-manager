@@ -881,6 +881,42 @@ async function startWebServer() {
 					res.end(JSON.stringify({ error: 'Request error' }));
 				}
 			});
+		} else if (req.url === '/api/open-backup-folder' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const { game: gameName, backup: backupName } = JSON.parse(body);
+					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
+						throw new Error('Invalid backup name');
+					}
+
+					const backupPath = path.join(BACKUP_DIR, backupName);
+					if (!fs.existsSync(backupPath)) {
+						throw new Error('Backup not found');
+					}
+
+					const platform = os.platform();
+					const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
+					spawn(command, [backupPath], { detached: true, stdio: 'ignore' }).unref();
+
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: `Opened backup folder for ${backupName}` }));
+				} catch (error) {
+					console.error('[Web API] Open backup folder error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Request error' }));
+				}
+			});
 		} else if (req.url === '/api/sync' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => {

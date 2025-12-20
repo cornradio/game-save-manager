@@ -1,20 +1,18 @@
 <img width="414" height="301" alt="Group 72 (2)" src="https://github.com/user-attachments/assets/b97e1e9e-d597-43c5-b22b-900e7f6d7d8b" />
 
 
-# 游戏存档双端同步工具（Windows 双端）
-> 专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
->
-> 当然，也可以用来做本地游戏存档备份。
-> 他有命令行和web界面可选。
+# 🕹️ GSM
 
- <img width="687" height="400" alt="image" src="https://github.com/user-attachments/assets/987e18ea-6472-44d0-bacf-205409735bc7" />
-<img width="2054" height="1476" alt="image" src="https://github.com/user-attachments/assets/cb42f6fc-fa38-46ca-b8a9-2461a6dc24b9" />
+> 游戏存档双端同步工具+游戏存档备份恢复工具（Windows 双端）
+> 
+> 本来是专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
+> 
+> 经过我和cursor的共同努力和迭代，现在功能比较完善，即使不使用双端同步，他也是一个很好的本地游戏存档备份工具，界面直观操作简单。（唯一的缺点可能是安装比较复杂，这是nodejs的问题）
 
-
-
+<img width="2517" height="1751" alt="image" src="https://github.com/user-attachments/assets/aa3de200-b966-436a-8b36-77794e9fc115" />
 
 
-一个基于 Node.js 的交互式 CLI 工具，支持：
+一个基于 Node.js 的交互式 CLI + WEB工具，支持：
 - 本地与远程（SSH）之间的双向同步：本地 -> 远程、远程 -> 本地
 - 仅备份本地存档（不会访问远程）
 - 同步前自动备份本地与远程存档到 `backups/` 目录
@@ -81,30 +79,6 @@ npm start -- --game "mc dungeons" --direction backup
 
 > 未通过参数指定时，会自动进入交互式选择。
 
-
-## 远程路径书写
-
-- Windows 远程建议使用正斜杠：例如 `C:/Users/foo/Saved Games`
-- linux 未进行过测试，我的steamdeck买了 3300￥。
-
-## 选择 scp/pscp （高级）
-
-- 默认：SFTP（推荐）。无需外部命令，兼容 Windows 远程（OpenSSH Server）。
-- 强制 scp：需系统存在 `pscp`（PuTTY）或 `scp`。
-  - `pscp` 支持 `-pw` 非交互密码，非常适合自动化
-  - `scp` 不支持直接传递密码，若未配置免密登录，命令会卡在密码输入
-
-你可在首次运行时选择“强制 scp/pscp”，或手动编辑 `data/config.json` 的 `preferScpTool` 为 `"scp"`。
-
-
-## 注意
-
-- 若使用 `scp` 且未配置免密，请考虑改为 `pscp` 或切回默认的 SFTP。
-- SFTP 模式下，工具会递归创建远程目录并进行上传/下载，可兼容 Windows 远程盘符（例如 `C:/`、`D:/`）。
-- 当选择“本地 -> 远程”时，远程目标目录会在同步前清空，确保最终内容与本地一致（远程多余文件会被移除）。
-- 当选择“远程 -> 本地”时，本地目标目录会在同步前清空，以确保最终内容与远程完全一致（缺失文件会被移除）。
-- “仅备份本地存档”不会访问远程，无需远程 SSH 凭据即可使用。
-- 请确保远程主机已启用 SSH/SFTP 服务。
 
 
 ## 额外提示 ：win掌机安装openssh步骤

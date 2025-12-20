@@ -8,6 +8,18 @@ import which from 'which';
 import { spawn } from 'child_process';
 import SFTPClient from 'ssh2-sftp-client';
 import http from 'http';
+import net from 'net';
+
+// 全局错误处理，防止进程崩溃
+process.on('uncaughtException', (err) => {
+	console.error('未捕获的异常:', err);
+	// 不退出进程，让服务器继续运行
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('未处理的Promise拒绝:', reason);
+	// 不退出进程，让服务器继续运行
+});
 
 const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, 'data');
@@ -60,6 +72,25 @@ function saveConfig(cfg) {
 
 function timestamp() {
 	return dayjs().format('YYYYMMDD_HHmmss');
+}
+
+function getDirSize(dirPath) {
+	let size = 0;
+	try {
+		const files = fs.readdirSync(dirPath);
+		for (const file of files) {
+			const filePath = path.join(dirPath, file);
+			const stats = fs.statSync(filePath);
+			if (stats.isDirectory()) {
+				size += getDirSize(filePath);
+			} else {
+				size += stats.size;
+			}
+		}
+	} catch (err) {
+		console.error(`Error calculating size for ${dirPath}:`, err);
+	}
+	return size;
 }
 
 async function openConfigFile() {
@@ -580,10 +611,48 @@ async function resolveDirection(argDirection) {
 	return direction;
 }
 
+// 检查端口是否可用
+function isPortAvailable(port) {
+	return new Promise((resolve) => {
+		const server = net.createServer();
+		server.listen(port, () => {
+			server.once('close', () => resolve(true));
+			server.close();
+		});
+		server.on('error', () => resolve(false));
+	});
+}
+
+// 查找可用端口
+async function findAvailablePort(startPort = 8080, maxAttempts = 20) {
+	for (let i = 0; i < maxAttempts; i++) {
+		const port = startPort + i;
+		const available = await isPortAvailable(port);
+		if (available) {
+			return port;
+		}
+	}
+	throw new Error(`无法找到可用端口（尝试了 ${startPort} 到 ${startPort + maxAttempts - 1}）`);
+}
+
 async function startWebServer() {
-	const port = 8080;
-	const server = http.createServer(async (req, res) => {
-		if (req.url === '/' && req.method === 'GET') {
+	// 自动查找可用端口
+	let port;
+	try {
+		port = await findAvailablePort(8080, 20);
+		if (port !== 8080) {
+			console.log(`端口 8080 被占用，自动切换到端口 ${port}`);
+		}
+	} catch (error) {
+		console.error('无法启动服务器:', error.message);
+		process.exit(1);
+	}
+
+	const server = http.createServer((req, res) => {
+		// 包装异步处理，确保错误被捕获
+		(async () => {
+			try {
+				if (req.url === '/' && req.method === 'GET') {
 			const htmlPath = path.join(ROOT, 'src', 'index.html');
 			fs.readFile(htmlPath, (err, data) => {
 				if (err) {
@@ -605,20 +674,160 @@ async function startWebServer() {
 			}
 		} else if (req.url.startsWith('/api/backups/') && req.method === 'GET') {
 			try {
-				const gameName = decodeURIComponent(req.url.split('/')[3]);
+				const parts = req.url.split('/');
+				const gameName = decodeURIComponent(parts[3]);
+				
 				if (!fs.existsSync(BACKUP_DIR)) {
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ count: 0 }));
+					res.end(JSON.stringify({ count: 0, backups: [] }));
 					return;
 				}
+				
 				const allBackups = fs.readdirSync(BACKUP_DIR);
 				const gameBackups = allBackups.filter(dir => dir.startsWith(`${gameName}_`));
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ count: gameBackups.length }));
+				
+				// 如果只请求数量（旧API兼容）
+				if (parts.length === 4) {
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ count: gameBackups.length }));
+					return;
+				}
+				
+				// 如果请求详细列表
+				if (parts.length === 5 && parts[4] === 'list') {
+					const backupList = [];
+					for (const backupName of gameBackups) {
+						const backupPath = path.join(BACKUP_DIR, backupName);
+						try {
+							const stats = fs.statSync(backupPath);
+							const localPath = path.join(backupPath, 'local');
+							let size = 0;
+							let hasLocal = false;
+							let hasRemote = false;
+							
+							if (fs.existsSync(localPath)) {
+								hasLocal = true;
+								size += getDirSize(localPath);
+							}
+							
+							const remotePath = path.join(backupPath, 'remote');
+							if (fs.existsSync(remotePath)) {
+								hasRemote = true;
+								size += getDirSize(remotePath);
+							}
+							
+							// 解析时间戳（格式：游戏名_YYYYMMDD_HHmmss）
+							const timestampMatch = backupName.match(/_(\d{8}_\d{6})$/);
+							let backupTime = stats.mtime;
+							if (timestampMatch) {
+								const ts = timestampMatch[1];
+								const year = ts.substring(0, 4);
+								const month = ts.substring(4, 6);
+								const day = ts.substring(6, 8);
+								const hour = ts.substring(9, 11);
+								const minute = ts.substring(11, 13);
+								const second = ts.substring(13, 15);
+								backupTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+							}
+							
+							backupList.push({
+								name: backupName,
+								time: backupTime.toISOString(),
+								size: size,
+								hasLocal,
+								hasRemote
+							});
+						} catch (err) {
+							console.error(`Error reading backup ${backupName}:`, err);
+						}
+					}
+					
+					// 按时间倒序排列
+					backupList.sort((a, b) => new Date(b.time) - new Date(a.time));
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ count: gameBackups.length, backups: backupList }));
+					return;
+				}
+				
+				res.writeHead(400, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: 'Invalid request' }));
 			} catch (error) {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ error: 'Failed to count backups' }));
+				res.end(JSON.stringify({ error: 'Failed to get backups', message: error.message }));
 			}
+		} else if (req.url.startsWith('/api/backups/') && req.method === 'DELETE') {
+			try {
+				const parts = req.url.split('/');
+				const gameName = decodeURIComponent(parts[3]);
+				const backupName = decodeURIComponent(parts[4]);
+				
+				if (!backupName || !backupName.startsWith(`${gameName}_`)) {
+					throw new Error('Invalid backup name');
+				}
+				
+				const backupPath = path.join(BACKUP_DIR, backupName);
+				if (!fs.existsSync(backupPath)) {
+					throw new Error('Backup not found');
+				}
+				
+				await fse.remove(backupPath);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: `Backup ${backupName} deleted successfully` }));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url.startsWith('/api/backups/') && req.url.endsWith('/restore') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const parts = req.url.split('/');
+					const gameName = decodeURIComponent(parts[3]);
+					const backupName = decodeURIComponent(parts[4]);
+					
+					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
+						throw new Error('Invalid backup name');
+					}
+					
+					const cfg = loadConfig();
+					const game = cfg.games.find(g => g.name === gameName);
+					if (!game) {
+						throw new Error(`Game '${gameName}' not found`);
+					}
+					
+					const backupPath = path.join(BACKUP_DIR, backupName);
+					const localBackupPath = path.join(backupPath, 'local');
+					
+					if (!fs.existsSync(localBackupPath)) {
+						throw new Error('Local backup not found');
+					}
+					
+					// 先备份当前本地存档
+					await backupLocalOnly(game);
+					
+					// 恢复备份
+					await fse.emptyDir(game.localPath);
+					await fse.copy(localBackupPath, game.localPath, { overwrite: true });
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: `Backup ${backupName} restored successfully` }));
+				} catch (error) {
+					console.error('[Web API] Restore backup error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ error: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Request error' }));
+				}
+			});
 		} else if (req.url === '/api/open-backups-folder' && req.method === 'POST') {
 			try {
 				const platform = os.platform();
@@ -641,8 +850,7 @@ async function startWebServer() {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ message: error.message }));
 			}
-		}
-		 else if (req.url === '/api/open-folder' && req.method === 'POST') {
+		} else if (req.url === '/api/open-folder' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
 			req.on('end', async () => {
@@ -659,8 +867,18 @@ async function startWebServer() {
 					res.writeHead(200, { 'Content-Type': 'application/json' });
 					res.end(JSON.stringify({ message: `Opened folder for ${gameName}` }));
 				} catch (error) {
+					console.error('[Web API] Open folder error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
 					res.writeHead(500, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ message: error.message }));
+					res.end(JSON.stringify({ error: 'Request error' }));
 				}
 			});
 		} else if (req.url === '/api/sync' && req.method === 'POST') {
@@ -707,34 +925,101 @@ async function startWebServer() {
 						console.log(`-----`);
 					}
 				} catch (error) {
-					console.error('[Web API] Error:', error);
+					console.error('[Web API] Sync error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
 					res.writeHead(500, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ message: error.message }));
+					res.end(JSON.stringify({ error: 'Request error' }));
 				}
 			});
 		} else {
 			res.writeHead(404, { 'Content-Type': 'text/plain' });
 			res.end('Not Found');
 		}
+			} catch (error) {
+				console.error('[Web Server] Unhandled error:', error);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Internal server error', message: error.message }));
+				}
+			}
+		})().catch(err => {
+			console.error('[Web Server] Unhandled promise rejection:', err);
+			if (!res.headersSent) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: 'Internal server error', message: err.message }));
+			}
+		});
 	});
 
-	try {
-		server.listen(port, () => {
+	// 添加错误处理
+	server.on('error', (err) => {
+		console.error('[Web Server] Server error:', err);
+		if (err.code === 'EADDRINUSE') {
+			console.error(`端口 ${port} 被占用，尝试切换到下一个端口...`);
+			// 如果端口被占用，尝试下一个端口
+			findAvailablePort(port + 1, 10).then(newPort => {
+				console.log(`正在端口 ${newPort} 上重新启动服务器...`);
+				server.listen(newPort);
+			}).catch(e => {
+				console.error('无法找到可用端口:', e.message);
+				process.exit(1);
+			});
+		}
+	});
+
+	// 添加客户端错误处理
+	server.on('clientError', (err, socket) => {
+		console.error('[Web Server] Client error:', err);
+		socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+	});
+
+	// 启动服务器
+	server.listen(port, () => {
 		const url = `http://localhost:${port}`;
-		console.log(`Web server running at ${url}`);
-		console.log('Press Ctrl+C to stop the server.');
+		console.log(`✅ Web 服务器已启动: ${url}`);
+		console.log('按 Ctrl+C 停止服务器');
 		try {
 			const platform = os.platform();
 			const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
 			spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
-			} 
-		catch (e) {
-				console.error('Could not automatically open browser.', e);
-			}
-		});
-	}catch (err) {
-		console.error('Failed to start web server:', err);
-	}
+		} catch (e) {
+			console.error('无法自动打开浏览器:', e);
+		}
+	});
+
+	// 如果启动时端口被占用（虽然我们已经检查过，但以防万一）
+	server.on('error', (err) => {
+		if (err.code === 'EADDRINUSE') {
+			console.error(`❌ 端口 ${port} 被占用，尝试查找其他可用端口...`);
+			findAvailablePort(port + 1, 10).then(newPort => {
+				console.log(`🔄 正在端口 ${newPort} 上重新启动服务器...`);
+				server.listen(newPort, () => {
+					const url = `http://localhost:${newPort}`;
+					console.log(`✅ Web 服务器已启动: ${url}`);
+					try {
+						const platform = os.platform();
+						const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
+						spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
+					} catch (e) {
+						console.error('无法自动打开浏览器:', e);
+					}
+				});
+			}).catch(e => {
+				console.error('❌ 无法找到可用端口:', e.message);
+				process.exit(1);
+			});
+		} else {
+			console.error('[Web Server] 服务器错误:', err);
+		}
+	});
 
 }
 

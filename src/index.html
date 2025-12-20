@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
@@ -16,165 +16,245 @@
             --text-soft: #aaaaaa;
             --radius: 10px;
             --blur: 20px;
+            --selected: rgba(84, 250, 6, 0.1);
+        }
+
+        * {
+            box-sizing: border-box;
         }
 
         body {
             margin: 0;
-            padding: 2.4em;
+            padding: 0;
             background: var(--bg);
             color: var(--text-main);
             font-family: "Segoe UI", Inter, sans-serif;
             backdrop-filter: blur(10px);
+            height: 100vh;
+            overflow: hidden;
         }
 
-        h1 {
-            margin: 0 0 1em 0;
-            font-size: 2rem;
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+
+        /* 左侧游戏列表 */
+        .sidebar {
+            width: 300px;
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 1.5em;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
             font-weight: 600;
             color: #fff;
         }
 
-        /* 顶部按钮 */
-        .header-actions button {
-            padding: 8px 16px;
+        .sidebar-actions {
+            margin-top: 1em;
+            display: flex;
+            gap: 8px;
+        }
+
+        .sidebar-actions button {
+            flex: 1;
+            padding: 8px 12px;
             background: #141414;
             border: 1px solid var(--border);
             color: var(--text-main);
-            border-radius: var(--radius);
+            border-radius: 6px;
             cursor: pointer;
             transition: 0.25s ease;
+            font-size: 0.85em;
         }
 
-        .header-actions button:hover {
+        .sidebar-actions button:hover {
             border-color: var(--accent);
             color: var(--accent);
         }
 
-        #game-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 1.5em;
+        .game-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1em;
         }
 
-        /* 卡片：更高级的暗黑玻璃面板 */
         .game-item {
-            background: var(--panel);
+            background: rgba(20, 20, 20, 0.5);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 1.4em;
-            backdrop-filter: blur(var(--blur));
+            padding: 1em;
+            margin-bottom: 0.8em;
+            cursor: pointer;
             transition: 0.25s;
-            display: flex;
-            flex-direction: column;
         }
 
         .game-item:hover {
             border-color: var(--accent);
-            transform: translateY(-2px);
+            background: rgba(20, 20, 20, 0.7);
         }
 
-        .game-item h2 {
-            margin: 0 0 0.6em 0;
-            font-size: 1.2rem;
+        .game-item.selected {
+            border-color: var(--accent);
+            background: var(--selected);
+        }
+
+        .game-item h3 {
+            margin: 0 0 0.5em 0;
+            font-size: 1rem;
             font-weight: 600;
             color: #fff;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
 
-        .game-header-left {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .game-header-right {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .game-item .backup-count-badge {
-            font-size: 0.8rem;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: normal;
+        .game-item .backup-count {
+            font-size: 0.85em;
             color: var(--text-soft);
         }
 
-        .info-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            border: 1px solid var(--text-soft);
-            color: var(--text-soft);
-            font-size: 12px;
-            font-style: italic;
-            cursor: pointer;
-            transition: 0.2s;
+        /* 右侧详情面板 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
-        .info-icon:hover {
-            border-color: var(--accent);
-            color: var(--accent);
+        .content-header {
+            padding: 1.5em;
+            border-bottom: 1px solid var(--border);
         }
 
-        .path-details {
-            display: none;
-            margin-top: 10px;
-            animation: fadeIn 0.3s;
+        .content-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #fff;
         }
 
-        .path-details.show {
+        .content-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5em;
+        }
+
+        .section {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5em;
+            margin-bottom: 1.5em;
+        }
+
+        .section h3 {
+            margin: 0 0 1em 0;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #fff;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5em;
+        }
+
+        .info-item {
+            margin: 0.8em 0;
+        }
+
+        .info-item label {
             display: block;
+            font-size: 0.85em;
+            color: var(--text-soft);
+            margin-bottom: 0.3em;
         }
 
-        .game-item p {
-            margin: 0.4em 0;
+        .info-item .value {
             font-family: monospace;
             background: #111;
             padding: 0.5em;
             border-radius: 6px;
             border: 1px solid #1a1a1a;
-            color: var(--text-soft);
+            color: var(--text-main);
             font-size: 0.9em;
             word-break: break-all;
         }
 
-        .schedule-select {
-            background: #141414;
-            color: var(--text-soft);
+        /* 备份列表 */
+        .backup-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .backup-item {
+            background: rgba(20, 20, 20, 0.5);
             border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-size: 0.8rem;
-            outline: none;
+            border-radius: 6px;
+            padding: 1em;
+            margin-bottom: 0.8em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
 
-        .schedule-select:focus {
+        .backup-item-info {
+            flex: 1;
+        }
+
+        .backup-item-info .backup-time {
+            font-size: 0.9em;
+            color: var(--text-main);
+            margin-bottom: 0.3em;
+        }
+
+        .backup-item-info .backup-size {
+            font-size: 0.85em;
+            color: var(--text-soft);
+        }
+
+        .backup-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .backup-item-actions button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.85em;
+        }
+
+        .backup-item-actions button:hover {
             border-color: var(--accent);
+            color: var(--accent);
         }
 
-        /* 按钮：Minimal + 干净 */
-        .actions {
-            margin-top: auto;
-            padding-top: 1em;
+        .backup-item-actions button.danger:hover {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        /* 按钮组 */
+        .button-group {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
+            margin-top: 1em;
         }
 
-        .actions button {
-            flex: 1;
-            padding: 8px 10px;
+        .button-group button {
+            padding: 10px 16px;
             border-radius: 6px;
             border: 1px solid var(--border);
             background: #151515;
@@ -182,13 +262,59 @@
             cursor: pointer;
             transition: 0.2s ease;
             font-size: 0.9em;
-            white-space: nowrap;
         }
 
-        .actions button:hover {
+        .button-group button:hover {
             border-color: var(--accent);
             color: var(--accent);
-            background: #151515;
+        }
+
+        .button-group button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .button-group button.primary:hover {
+            background: #6aff1a;
+        }
+
+        /* 定时备份设置 */
+        .schedule-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 1em;
+        }
+
+        .schedule-control label {
+            font-size: 0.9em;
+            color: var(--text-soft);
+        }
+
+        .schedule-control select {
+            background: #141414;
+            color: var(--text-soft);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 0.9em;
+            outline: none;
+        }
+
+        .schedule-control select:focus {
+            border-color: var(--accent);
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 3em 1em;
+            color: var(--text-soft);
+        }
+
+        .empty-state p {
+            margin: 0.5em 0;
         }
 
         /* Toast Notification */
@@ -239,54 +365,55 @@
                 transform: translateX(20px);
             }
         }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-5px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* 日志：专业黑框终端风，不霓虹 */
-        #log-container {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: 0;
-            /* Hidden by default, can be toggled if needed, or just rely on toasts */
-            overflow: hidden;
-        }
     </style>
 </head>
 
 <body>
+    <div class="container">
+        <!-- 左侧游戏列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🕹️ GSM</h1>
+                <div class="sidebar-actions">
+                    <button onclick="openBackupsFolder()">查看备份</button>
+                    <button onclick="openConfig()">修改配置</button>
+                </div>
+            </div>
+            <div class="game-list" id="game-list">
+                <!-- 游戏列表将在这里动态生成 -->
+            </div>
+        </div>
 
-    <div class="header-actions" style="float:right;">
-        <button onclick="openBackupsFolder()">查看备份</button>
-        <button onclick="openConfig()">修改配置</button>
+        <!-- 右侧详情面板 -->
+        <div class="main-content">
+            <div class="content-header">
+                <h2 id="selected-game-name">请选择一个游戏</h2>
+            </div>
+            <div class="content-body" id="content-body">
+                <div class="empty-state">
+                    <p>从左侧选择一个游戏以查看详情</p>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <h1>🕹️ GSM 游戏存档管家</h1>
-
-    <ul id="game-list"></ul>
     <div id="toast-container"></div>
 
     <script>
-        // Simple beep sound using Web Audio API
+        // 全局状态
+        let selectedGame = null;
+        let games = [];
+        const activeIntervals = {};
+
+        // Toast 通知
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playSuccessSound() {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const oscillator = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-            oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1); // C6
+            oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime);
+            oscillator.frequency.exponentialRampToValueAtTime(1046.5, audioCtx.currentTime + 0.1);
             gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
             oscillator.connect(gainNode);
@@ -314,155 +441,297 @@
             }, 3000);
         }
 
+        // API 调用
         async function openBackupsFolder() {
             try {
                 const r = await fetch('/api/open-backups-folder', { method: 'POST' });
                 if (!r.ok) throw new Error('Server error');
-                showToast('Backups folder opened.', 'success');
+                showToast('已打开备份文件夹', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
+
         async function openConfig() {
             try {
                 const r = await fetch('/api/open-config', { method: 'POST' });
                 if (!r.ok) throw new Error('Server error');
-                showToast('Config file opened.', 'success');
+                showToast('已打开配置文件', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
-        async function openFolder(gameName) {
+        // 获取游戏列表
+        async function fetchGames() {
             try {
-                const r = await fetch('/api/open-folder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ game: gameName })
-                });
-                if (!r.ok) throw new Error('Server error');
-                showToast(`Folder opened: ${gameName}`, 'success');
+                const r = await fetch('/api/games');
+                if (!r.ok) throw new Error('获取游戏列表失败');
+                games = await r.json();
+                renderGameList();
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
-        async function performAction(gameName, direction, options = {}) {
-            const { silent = false } = options;
-            if (!silent) showToast(`${direction} started...`, 'info');
+        // 渲染游戏列表
+        async function renderGameList() {
+            const list = document.getElementById('game-list');
+            list.innerHTML = '';
+
+            for (const game of games) {
+                const item = document.createElement('div');
+                item.className = 'game-item';
+                if (selectedGame && selectedGame.name === game.name) {
+                    item.classList.add('selected');
+                }
+
+                // 获取备份数量
+                let backupCount = 0;
+                try {
+                    const r = await fetch(`/api/backups/${encodeURIComponent(game.name)}`);
+                    if (r.ok) {
+                        const data = await r.json();
+                        backupCount = data.count || 0;
+                    }
+                } catch (e) {
+                    console.error('Failed to get backup count:', e);
+                }
+
+                item.innerHTML = `
+                    <h3>${game.name}</h3>
+                    <div class="backup-count">${backupCount} 个备份</div>
+                `;
+
+                item.onclick = () => selectGame(game);
+                list.appendChild(item);
+            }
+        }
+
+        // 选择游戏
+        function selectGame(game) {
+            selectedGame = game;
+            renderGameList();
+            renderGameDetails();
+        }
+
+        // 渲染游戏详情
+        async function renderGameDetails() {
+            const header = document.getElementById('selected-game-name');
+            const body = document.getElementById('content-body');
+
+            if (!selectedGame) {
+                header.textContent = '请选择一个游戏';
+                body.innerHTML = '<div class="empty-state"><p>从左侧选择一个游戏以查看详情</p></div>';
+                return;
+            }
+
+            header.textContent = selectedGame.name;
+
+            // 获取备份列表
+            let backups = [];
+            try {
+                const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/list`);
+                if (r.ok) {
+                    const data = await r.json();
+                    backups = data.backups || [];
+                }
+            } catch (e) {
+                console.error('Failed to get backups:', e);
+            }
+
+            // 格式化文件大小
+            function formatSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            // 格式化时间
+            function formatTime(isoString) {
+                const date = new Date(isoString);
+                return date.toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+
+            // 获取当前定时设置
+            const currentSchedule = activeIntervals[selectedGame.name]?.minutes || 0;
+
+            body.innerHTML = `
+                <!-- 板块1: 基础信息 -->
+                <div class="section">
+                    <h3>基础信息</h3>
+                    <div class="info-item">
+                        <label>游戏名称</label>
+                        <div class="value">${selectedGame.name}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>本地存档路径</label>
+                        <div class="value">${selectedGame.localPath}</div>
+                    </div>
+                    <div class="info-item">
+                        <label>远程存档路径</label>
+                        <div class="value">${selectedGame.remoteFullPath || '未设置'}</div>
+                    </div>
+                </div>
+
+                <!-- 板块2: 备份列表 -->
+                <div class="section">
+                    <h3>备份管理</h3>
+                    <div class="button-group">
+                        <button class="primary" onclick="createBackup()">新建本地备份</button>
+                    </div>
+                    <div class="schedule-control">
+                        <label>定时备份：</label>
+                        <select id="schedule-select" onchange="updateSchedule(this.value)">
+                            <option value="0" ${currentSchedule == 0 ? 'selected' : ''}>关闭</option>
+                            <option value="1" ${currentSchedule == 1 ? 'selected' : ''}>每 1 分钟</option>
+                            <option value="5" ${currentSchedule == 5 ? 'selected' : ''}>每 5 分钟</option>
+                            <option value="15" ${currentSchedule == 15 ? 'selected' : ''}>每 15 分钟</option>
+                            <option value="30" ${currentSchedule == 30 ? 'selected' : ''}>每 30 分钟</option>
+                            <option value="60" ${currentSchedule == 60 ? 'selected' : ''}>每 1 小时</option>
+                        </select>
+                    </div>
+                    <div class="backup-list" id="backup-list">
+                        ${backups.length === 0 
+                            ? '<div class="empty-state"><p>暂无备份</p></div>'
+                            : backups.map(backup => `
+                                <div class="backup-item">
+                                    <div class="backup-item-info">
+                                        <div class="backup-time">${formatTime(backup.time)}</div>
+                                        <div class="backup-size">${formatSize(backup.size)} ${backup.hasLocal ? '(本地)' : ''} ${backup.hasRemote ? '(远程)' : ''}</div>
+                                    </div>
+                                    <div class="backup-item-actions">
+                                        <button onclick="restoreBackup('${backup.name}')">恢复到此存档</button>
+                                        <button class="danger" onclick="deleteBackup('${backup.name}')">删除</button>
+                                    </div>
+                                </div>
+                            `).join('')
+                        }
+                    </div>
+                </div>
+
+                <!-- 板块3: 远程功能 -->
+                <div class="section">
+                    <h3>远程同步</h3>
+                    <div class="button-group">
+                        <button onclick="performSync('push')">推送到远程 🏠 → 🌐</button>
+                        <button onclick="performSync('pull')">下拉到本地 🌐 → 🏠</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 创建备份
+        async function createBackup() {
+            if (!selectedGame) return;
+            showToast('正在创建备份...', 'info');
             try {
                 const r = await fetch('/api/sync', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ game: gameName, direction })
+                    body: JSON.stringify({ game: selectedGame.name, direction: 'backupLocal' })
                 });
                 const result = await r.json();
-                if (!r.ok) throw new Error(result.message);
-                showToast(result.message, 'success', silent);
-                fetchGames();
+                if (!r.ok) throw new Error(result.message || '备份失败');
+                showToast(result.message || '备份成功', 'success');
+                await fetchGames();
+                await renderGameDetails();
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
-        const activeIntervals = {};
-
-        function togglePaths(id) {
-            const el = document.getElementById(id);
-            if (el) el.classList.toggle('show');
-        }
-
-        function updateSchedule(gameName, minutes) {
-            // Clear existing interval
-            if (activeIntervals[gameName]) {
-                clearInterval(activeIntervals[gameName].id);
-                delete activeIntervals[gameName];
-            }
-
-            const minVal = parseInt(minutes, 10);
-            if (minVal > 0) {
-                showToast(`Scheduled backup for ${gameName} every ${minVal}m`, 'info');
-                const id = setInterval(() => {
-                    performAction(gameName, 'backupLocal', { silent: true });
-                }, minVal * 60 * 1000);
-                activeIntervals[gameName] = { id, minutes: minVal };
-            } else {
-                showToast(`Schedule disabled for ${gameName}`, 'info');
-            }
-        }
-
-        async function fetchGames() {
+        // 删除备份
+        async function deleteBackup(backupName) {
+            if (!selectedGame) return;
+            if (!confirm(`确定要删除备份 "${backupName}" 吗？`)) return;
+            
             try {
-                const r = await fetch('/api/games');
-                if (!r.ok) throw new Error('Fetch error');
-                const games = await r.json();
-
-                const list = document.getElementById('game-list');
-                // Don't clear list if we want to preserve state, but here we rebuild. 
-                // To preserve schedule selection, we might need to read from activeIntervals or DOM.
-                // For simplicity, we'll rebuild and re-apply schedule selection if we tracked it, 
-                // but currently activeIntervals tracks the logic, not the UI state.
-                // Let's just rebuild and set the select value based on activeIntervals.
-
-                list.innerHTML = '';
-
-                for (const g of games) {
-                    const item = document.createElement('li');
-                    item.className = 'game-item';
-                    const pathsId = `paths-${g.name.replace(/\s+/g, '-')}`;
-
-                    // Determine current schedule value
-                    let currentSchedule = '0';
-                    // We can't easily reverse lookup interval time from ID, so we might need to store it.
-                    // For this MVP, if it's in activeIntervals, we might not know the exact time unless we stored it.
-                    // Let's upgrade activeIntervals to store { id, minutes }.
-                    if (activeIntervals[g.name]) {
-                        currentSchedule = activeIntervals[g.name].minutes;
-                    }
-
-                    item.innerHTML = `
-                <h2>
-                    <div class="game-header-left">
-                        ${g.name}
-                        <span class="backup-count-badge">...</span>
-                        <span class="info-icon" onclick="togglePaths('${pathsId}')" title="Show Paths">i</span>
-                    </div>
-                    <div class="game-header-right">
-                        <select class="schedule-select" onchange="updateSchedule('${g.name}', this.value)">
-                            <option value="0" ${currentSchedule == 0 ? 'selected' : ''}>定时: Off</option>
-                            <option value="1" ${currentSchedule == 1 ? 'selected' : ''}>1m</option>
-                            <option value="5" ${currentSchedule == 5 ? 'selected' : ''}>5m</option>
-                            <option value="15" ${currentSchedule == 15 ? 'selected' : ''}>15m</option>
-                            <option value="30" ${currentSchedule == 30 ? 'selected' : ''}>30m</option>
-                        </select>
-                    </div>
-                </h2>
-                <div id="${pathsId}" class="path-details">
-                    <p title="${g.localPath}"><strong>Local:</strong> ${g.localPath}</p>
-                    <p title="${g.remoteFullPath || 'Not set'}"><strong>Remote:</strong> ${g.remoteFullPath || 'Not set'}</p>
-                </div>
-                <div class="actions">
-                    <button onclick="performAction('${g.name}','push')">🏠 → 🌐</button>
-                    <button onclick="performAction('${g.name}','pull')">🌐 → 🏠</button>
-                    <button onclick="performAction('${g.name}','backupLocal')">🏠🗘</button>
-                </div>
-            `;
-                    list.appendChild(item);
-
-                    fetch(`/api/backups/${encodeURIComponent(g.name)}`)
-                        .then(r => r.json())
-                        .then(d => { item.querySelector('.backup-count-badge').textContent = `${d.count} `; })
-                        .catch(() => { item.querySelector('.backup-count-badge').textContent = 'Error'; });
-                }
-
+                const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/${encodeURIComponent(backupName)}`, {
+                    method: 'DELETE'
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '删除失败');
+                showToast('备份已删除', 'success');
+                await fetchGames();
+                await renderGameDetails();
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
+        // 恢复备份
+        async function restoreBackup(backupName) {
+            if (!selectedGame) return;
+            if (!confirm(`确定要恢复备份 "${backupName}" 吗？当前本地存档将被覆盖！`)) return;
+            
+            showToast('正在恢复备份...', 'info');
+            try {
+                const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/${encodeURIComponent(backupName)}/restore`, {
+                    method: 'POST'
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '恢复失败');
+                showToast('备份已恢复', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 更新定时备份
+        function updateSchedule(minutes) {
+            if (!selectedGame) return;
+            const minVal = parseInt(minutes, 10);
+            
+            // 清除现有定时器
+            if (activeIntervals[selectedGame.name]) {
+                clearInterval(activeIntervals[selectedGame.name].id);
+                delete activeIntervals[selectedGame.name];
+            }
+
+            if (minVal > 0) {
+                showToast(`已设置定时备份：每 ${minVal} 分钟`, 'info');
+                const id = setInterval(() => {
+                    createBackup();
+                }, minVal * 60 * 1000);
+                activeIntervals[selectedGame.name] = { id, minutes: minVal };
+            } else {
+                showToast('已关闭定时备份', 'info');
+            }
+        }
+
+        // 执行同步
+        async function performSync(direction) {
+            if (!selectedGame) return;
+            const directionText = direction === 'push' ? '推送到远程' : '下拉到本地';
+            showToast(`${directionText}中...`, 'info');
+            try {
+                const r = await fetch('/api/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: selectedGame.name, direction })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.message || '同步失败');
+                showToast(result.message || '同步成功', 'success');
+                await fetchGames();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 初始化
         fetchGames();
     </script>
-
 </body>
 
 </html>

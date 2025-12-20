@@ -16,6 +16,11 @@
       "remoteFullPath": "/C:/Users/rober/AppData/LocalLow/Re,AER"
     },
     {
+      "name": "STS",
+      "localPath": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\SlayTheSpire\\saves",
+      "remoteFullPath": "/C:/Users/rober/Program Files (x86)/Steam/steamapps/common/SlayTheSpire/saves"
+    },
+    {
       "name": "SFTP-sync",
       "localPath": "C:\\Users\\kasus\\Downloads\\da",
       "remoteFullPath": "/C:/Users/rober/Downloads/da",
@@ -23,7 +28,7 @@
     }
   ],
   "remote": {
-    "host": "192.168.31.205",
+    "host": "192.168.31.201",
     "port": 22,
     "user": "rogallyx",
     "password": "kali"

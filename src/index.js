@@ -639,9 +639,9 @@ async function startWebServer() {
 	// 自动查找可用端口
 	let port;
 	try {
-		port = await findAvailablePort(8080, 20);
-		if (port !== 8080) {
-			console.log(`端口 8080 被占用，自动切换到端口 ${port}`);
+		port = await findAvailablePort(9123, 20);
+		if (port !== 9123) {
+			console.log(`端口 9123 被占用，自动切换到端口 ${port}`);
 		}
 	} catch (error) {
 		console.error('无法启动服务器:', error.message);
@@ -671,6 +671,133 @@ async function startWebServer() {
 			} catch (error) {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Failed to load config' }));
+			}
+		} else if (req.url === '/api/games' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const gameData = JSON.parse(body);
+					const cfg = loadConfig();
+					
+					// 验证必填字段
+					if (!gameData.name || !gameData.localPath) {
+						throw new Error('游戏名称和本地路径为必填项');
+					}
+					
+					// 检查游戏名称是否已存在
+					if (cfg.games.find(g => g.name === gameData.name)) {
+						throw new Error(`游戏 "${gameData.name}" 已存在`);
+					}
+					
+					const game = {
+						name: gameData.name.trim(),
+						localPath: path.resolve(gameData.localPath.trim()),
+						...(gameData.remoteFullPath ? { remoteFullPath: gameData.remoteFullPath.trim().replace(/\\/g, '/') } : {}),
+						...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : {})
+					};
+					
+					// 确保本地目录存在
+					fse.mkdirpSync(game.localPath);
+					
+					cfg.games.push(game);
+					saveConfig(cfg);
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: `游戏 "${game.name}" 已添加`, game }));
+				} catch (error) {
+					console.error('[Web API] Add game error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ error: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Request error' }));
+				}
+			});
+		} else if (req.url.startsWith('/api/games/') && req.method === 'PUT') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const parts = req.url.split('/');
+					const oldGameName = decodeURIComponent(parts[3]);
+					const gameData = JSON.parse(body);
+					const cfg = loadConfig();
+					
+					const gameIndex = cfg.games.findIndex(g => g.name === oldGameName);
+					if (gameIndex === -1) {
+						throw new Error(`游戏 "${oldGameName}" 不存在`);
+					}
+					
+					// 如果修改了名称，检查新名称是否已存在
+					if (gameData.name && gameData.name !== oldGameName) {
+						if (cfg.games.find(g => g.name === gameData.name && g.name !== oldGameName)) {
+							throw new Error(`游戏名称 "${gameData.name}" 已存在`);
+						}
+					}
+					
+					// 更新游戏配置
+					const updatedGame = {
+						...cfg.games[gameIndex],
+						...(gameData.name ? { name: gameData.name.trim() } : {}),
+						...(gameData.localPath ? { localPath: path.resolve(gameData.localPath.trim()) } : {}),
+						...(gameData.remoteFullPath !== undefined ? (gameData.remoteFullPath ? { remoteFullPath: gameData.remoteFullPath.trim().replace(/\\/g, '/') } : {}) : {}),
+						...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : {})
+					};
+					
+					// 确保本地目录存在
+					if (updatedGame.localPath) {
+						fse.mkdirpSync(updatedGame.localPath);
+					}
+					
+					cfg.games[gameIndex] = updatedGame;
+					saveConfig(cfg);
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: `游戏配置已更新`, game: updatedGame }));
+				} catch (error) {
+					console.error('[Web API] Update game error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ error: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Request error' }));
+				}
+			});
+		} else if (req.url.startsWith('/api/games/') && req.method === 'DELETE') {
+			try {
+				const parts = req.url.split('/');
+				const gameName = decodeURIComponent(parts[3]);
+				const cfg = loadConfig();
+				
+				const gameIndex = cfg.games.findIndex(g => g.name === gameName);
+				if (gameIndex === -1) {
+					throw new Error(`游戏 "${gameName}" 不存在`);
+				}
+				
+				cfg.games.splice(gameIndex, 1);
+				saveConfig(cfg);
+				
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: `游戏 "${gameName}" 已删除` }));
+			} catch (error) {
+				console.error('[Web API] Delete game error:', error);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
 			}
 		} else if (req.url.startsWith('/api/backups/') && req.method === 'GET') {
 			try {

@@ -65,6 +65,7 @@
             margin-top: 1em;
             display: flex;
             gap: 8px;
+            flex-wrap: wrap;
         }
 
         .sidebar-actions button {
@@ -76,12 +77,180 @@
             border-radius: 6px;
             cursor: pointer;
             transition: 0.25s ease;
-            font-size: 0.85em;
+            font-size: 0.65em;
         }
 
         .sidebar-actions button:hover {
             border-color: var(--accent);
             color: var(--accent);
+        }
+
+        .sidebar-actions button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .sidebar-actions button.primary:hover {
+            background: #6aff1a;
+        }
+
+        .game-item {
+            position: relative;
+        }
+
+        .game-item-actions {
+            position: absolute;
+            top: 0.5em;
+            right: 0.5em;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .game-item:hover .game-item-actions {
+            opacity: 1;
+        }
+
+        .game-item-actions button {
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: rgba(20, 20, 20, 0.9);
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.75em;
+        }
+
+        .game-item-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .game-item-actions button.danger:hover {
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        /* 模态框样式 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1d1d1d;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 2em;
+            min-width: 500px;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            margin-bottom: 1.5em;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+
+        .modal-body {
+            margin-bottom: 1.5em;
+        }
+
+        .form-group {
+            margin-bottom: 1em;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5em;
+            font-size: 0.9em;
+            color: var(--text-soft);
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 8px 12px;
+            background: #141414;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-main);
+            font-size: 0.9em;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .form-group .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .modal-footer {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .modal-footer button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.9em;
+        }
+
+        .modal-footer button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .modal-footer button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .modal-footer button.primary:hover {
+            background: #6aff1a;
         }
 
         .game-list {
@@ -461,6 +630,7 @@
             <div class="sidebar-header">
                 <h1>🕹️ GSM</h1>
                 <div class="sidebar-actions">
+                    <button class="primary" onclick="showAddGameModal()">添加游戏</button>
                     <button onclick="openBackupsFolder()">查看备份</button>
                     <button onclick="openConfig()">修改配置</button>
                 </div>
@@ -484,6 +654,41 @@
     </div>
 
     <div id="toast-container"></div>
+
+    <!-- 游戏配置模态框 -->
+    <div id="game-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">添加游戏</h2>
+            </div>
+            <div class="modal-body">
+                <form id="game-form">
+                    <div class="form-group">
+                        <label>游戏名称 *</label>
+                        <input type="text" id="game-name" required placeholder="例如：我的世界">
+                    </div>
+                    <div class="form-group">
+                        <label>本地存档路径 *</label>
+                        <input type="text" id="game-local-path" required placeholder="例如：C:\Users\...\saves">
+                    </div>
+                    <div class="form-group">
+                        <label>远程存档路径</label>
+                        <input type="text" id="game-remote-path" placeholder="例如：/home/user/saves（可选）">
+                    </div>
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="game-nobackup">
+                            <label for="game-nobackup">跳过备份（仅同步，不创建备份）</label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button onclick="closeGameModal()">取消</button>
+                <button class="primary" onclick="saveGame()">保存</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         // 全局状态
@@ -587,6 +792,10 @@
                 item.innerHTML = `
                     <h3>${game.name}</h3>
                     <div class="backup-count">${backupCount} 个备份</div>
+                    <div class="game-item-actions">
+                        <button onclick="event.stopPropagation(); showEditGameModal('${game.name.replace(/'/g, "\\'")}')" title="编辑">✏️</button>
+                        <button class="danger" onclick="event.stopPropagation(); deleteGame('${game.name.replace(/'/g, "\\'")}')" title="删除">🗑️</button>
+                    </div>
                 `;
 
                 item.onclick = () => selectGame(game);
@@ -862,6 +1071,118 @@
                 showToast(e.message, 'error');
             }
         }
+
+        // 游戏管理功能
+        let editingGameName = null;
+
+        function showAddGameModal() {
+            editingGameName = null;
+            document.getElementById('modal-title').textContent = '添加游戏';
+            document.getElementById('game-form').reset();
+            document.getElementById('game-modal').classList.add('show');
+        }
+
+        function showEditGameModal(gameName) {
+            const game = games.find(g => g.name === gameName);
+            if (!game) return;
+
+            editingGameName = gameName;
+            document.getElementById('modal-title').textContent = '编辑游戏';
+            document.getElementById('game-name').value = game.name;
+            document.getElementById('game-local-path').value = game.localPath;
+            document.getElementById('game-remote-path').value = game.remoteFullPath || '';
+            document.getElementById('game-nobackup').checked = game.nobackup || false;
+            document.getElementById('game-modal').classList.add('show');
+        }
+
+        function closeGameModal() {
+            document.getElementById('game-modal').classList.remove('show');
+            editingGameName = null;
+        }
+
+        async function saveGame() {
+            const name = document.getElementById('game-name').value.trim();
+            const localPath = document.getElementById('game-local-path').value.trim();
+            const remotePath = document.getElementById('game-remote-path').value.trim();
+            const nobackup = document.getElementById('game-nobackup').checked;
+
+            if (!name || !localPath) {
+                showToast('游戏名称和本地路径为必填项', 'error');
+                return;
+            }
+
+            try {
+                const gameData = {
+                    name,
+                    localPath,
+                    ...(remotePath ? { remoteFullPath: remotePath } : {}),
+                    nobackup
+                };
+
+                let url = '/api/games';
+                let method = 'POST';
+
+                if (editingGameName) {
+                    url = `/api/games/${encodeURIComponent(editingGameName)}`;
+                    method = 'PUT';
+                }
+
+                const r = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(gameData)
+                });
+
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '保存失败');
+
+                showToast(result.message || '保存成功', 'success');
+                closeGameModal();
+                await fetchGames();
+                
+                // 如果编辑的是当前选中的游戏，刷新详情
+                if (editingGameName && selectedGame && selectedGame.name === editingGameName) {
+                    const updatedGame = games.find(g => g.name === name);
+                    if (updatedGame) {
+                        selectGame(updatedGame);
+                    }
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteGame(gameName) {
+            if (!confirm(`确定要删除游戏 "${gameName}" 吗？此操作无法撤销。`)) return;
+
+            try {
+                const r = await fetch(`/api/games/${encodeURIComponent(gameName)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '删除失败');
+
+                showToast(result.message || '删除成功', 'success');
+                
+                // 如果删除的是当前选中的游戏，清空选择
+                if (selectedGame && selectedGame.name === gameName) {
+                    selectedGame = null;
+                    renderGameDetails();
+                }
+                
+                await fetchGames();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 点击模态框外部关闭
+        document.getElementById('game-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'game-modal') {
+                closeGameModal();
+            }
+        });
 
         // 初始化
         fetchGames();

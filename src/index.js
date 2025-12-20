@@ -736,16 +736,44 @@ async function startWebServer() {
 					}
 					
 					// 如果修改了名称，检查新名称是否已存在
-					if (gameData.name && gameData.name !== oldGameName) {
-						if (cfg.games.find(g => g.name === gameData.name && g.name !== oldGameName)) {
-							throw new Error(`游戏名称 "${gameData.name}" 已存在`);
+					const newGameName = gameData.name ? gameData.name.trim() : oldGameName;
+					if (newGameName !== oldGameName) {
+						if (cfg.games.find(g => g.name === newGameName && g.name !== oldGameName)) {
+							throw new Error(`游戏名称 "${newGameName}" 已存在`);
+						}
+						
+						// 重命名所有相关的备份文件夹
+						if (fs.existsSync(BACKUP_DIR)) {
+							const allBackups = fs.readdirSync(BACKUP_DIR);
+							const gameBackups = allBackups.filter(dir => dir.startsWith(`${oldGameName}_`));
+							
+							for (const backupName of gameBackups) {
+								// 提取时间戳部分（格式：游戏名_YYYYMMDD_HHmmss）
+								const timestampMatch = backupName.match(/_(\d{8}_\d{6})$/);
+								if (timestampMatch) {
+									const timestamp = timestampMatch[1];
+									const oldPath = path.join(BACKUP_DIR, backupName);
+									const newBackupName = `${newGameName}_${timestamp}`;
+									const newPath = path.join(BACKUP_DIR, newBackupName);
+									
+									try {
+										if (fs.existsSync(oldPath)) {
+											fs.renameSync(oldPath, newPath);
+											console.log(`已重命名备份文件夹: ${backupName} -> ${newBackupName}`);
+										}
+									} catch (renameError) {
+										console.error(`重命名备份文件夹失败: ${backupName}`, renameError);
+										// 继续处理其他备份，不中断整个流程
+									}
+								}
+							}
 						}
 					}
 					
 					// 更新游戏配置
 					const updatedGame = {
 						...cfg.games[gameIndex],
-						...(gameData.name ? { name: gameData.name.trim() } : {}),
+						...(gameData.name ? { name: newGameName } : {}),
 						...(gameData.localPath ? { localPath: path.resolve(gameData.localPath.trim()) } : {}),
 						...(gameData.remoteFullPath !== undefined ? (gameData.remoteFullPath ? { remoteFullPath: gameData.remoteFullPath.trim().replace(/\\/g, '/') } : {}) : {}),
 						...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : {})

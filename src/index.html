@@ -221,6 +221,48 @@
             width: auto;
         }
 
+        .form-group .help-link {
+            font-size: 0.8em;
+            color: var(--text-soft);
+            margin-top: 4px;
+        }
+
+        .form-group .help-link a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: 0.2s ease;
+        }
+
+        .form-group .help-link a:hover {
+            color: #6aff1a;
+            text-decoration: underline;
+        }
+
+        /* 侧边栏底部信息 */
+        .sidebar-footer {
+            padding: 1em;
+            border-top: 1px solid var(--border);
+            font-size: 0.75em;
+            color: var(--text-soft);
+            text-align: center;
+        }
+
+        .sidebar-footer a {
+            color: var(--accent);
+            text-decoration: none;
+            transition: 0.2s ease;
+        }
+
+        .sidebar-footer a:hover {
+            color: #6aff1a;
+            text-decoration: underline;
+        }
+
+        .sidebar-footer .copyright {
+            margin-top: 0.5em;
+            line-height: 1.5;
+        }
+
         .modal-footer {
             display: flex;
             gap: 8px;
@@ -638,6 +680,15 @@
             <div class="game-list" id="game-list">
                 <!-- 游戏列表将在这里动态生成 -->
             </div>
+            <div class="sidebar-footer">
+                <div>
+                    <a href="https://github.com/cornradio/game-save-manager" target="_blank" rel="noopener noreferrer">GitHub</a>
+                </div>
+                <div class="copyright">
+                    © 2024 cornradio<br>
+                    仅供个人使用，禁止商用
+                </div>
+            </div>
         </div>
 
         <!-- 右侧详情面板 -->
@@ -666,6 +717,9 @@
                     <div class="form-group">
                         <label>游戏名称 *</label>
                         <input type="text" id="game-name" required placeholder="例如：我的世界">
+                        <div class="help-link">
+                            <a href="https://emojidb.org/" target="_blank" rel="noopener noreferrer">🎨 挑选 Emoji</a>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>本地存档路径 *</label>

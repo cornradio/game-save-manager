@@ -1,7 +1,7 @@
 {
   "games": [
     {
-      "name": "⛏️mc dungeons",
+      "name": "mc dungeons",
       "localPath": "C:\\Users\\kasus\\Saved Games\\Mojang Studios\\Dungeons",
       "remoteFullPath": "/C:/Users/rober/Saved Games/Mojang Studios/Dungeons",
       "nobackup": false
@@ -12,19 +12,19 @@
       "remoteFullPath": "/C:/Users/rober/Documents/My Games/Fallout4/Saves"
     },
     {
-      "name": "魔女审判",
+      "name": "🧙🏻‍♀️魔女审判",
       "localPath": "C:\\Users\\kasus\\AppData\\LocalLow\\Re,AER",
       "remoteFullPath": "/C:/Users/rober/AppData/LocalLow/Re,AER",
       "nobackup": false
     },
     {
-      "name": "slay the spare",
+      "name": "STS",
       "localPath": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\SlayTheSpire\\saves",
       "remoteFullPath": "/C:/Users/rober/Program Files (x86)/Steam/steamapps/common/SlayTheSpire/saves",
       "nobackup": false
     },
     {
-      "name": "SFTP-sync",
+      "name": "📂SFTP-sync",
       "localPath": "C:\\Users\\kasus\\Downloads\\da",
       "remoteFullPath": "/C:/Users/rober/Downloads/da",
       "nobackup": true

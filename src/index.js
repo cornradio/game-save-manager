@@ -1459,9 +1459,9 @@ async function startWebServer() {
 						res.writeHead(200, { 'Content-Type': 'application/json' });
 						res.end(JSON.stringify({ message: `Successfully backed up ${game.name} locally.` }));
 					} else {
-						const remote = getDefaultSshMachine(cfg);
+						const remote = cfg.remote;
 						if (!remote || !remote.host || !remote.user) {
-							throw new Error('SSH未配置，请先在SSH管理中添加机器');
+							throw new Error('SSH未配置，请在配置文件中设置');
 						}
 						await backupBoth(game, remote, normalizedDir);
 

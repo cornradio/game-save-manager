@@ -59,15 +59,32 @@ function ensureDirs() {
 function loadConfig() {
 	ensureDirs();
 	if (!fs.existsSync(CONFIG_PATH)) {
-		const defaultCfg = { games: [], remote: { host: '', port: 22, user: '', password: '' }, preferScpTool: 'auto' };
+		const defaultCfg = { 
+			games: [], 
+			preferScpTool: 'auto',
+			sshMachines: [],
+			defaultSshMachine: null
+		};
 		fse.writeJsonSync(CONFIG_PATH, defaultCfg, { spaces: 2 });
 		return defaultCfg;
 	}
-	return fse.readJsonSync(CONFIG_PATH);
+	const cfg = fse.readJsonSync(CONFIG_PATH);
+	if (!cfg.sshMachines) {
+		cfg.sshMachines = [];
+		cfg.defaultSshMachine = null;
+	}
+	return cfg;
 }
 
 function saveConfig(cfg) {
 	fse.writeJsonSync(CONFIG_PATH, cfg, { spaces: 2 });
+}
+
+function getDefaultSshMachine(cfg) {
+	if (!cfg) return null;
+	if (!cfg.defaultSshMachine) return null;
+	const machine = cfg.sshMachines?.find(m => m.id === cfg.defaultSshMachine);
+	return machine || null;
 }
 
 function timestamp() {
@@ -1174,6 +1191,247 @@ async function startWebServer() {
 					res.end(JSON.stringify({ error: 'Request error' }));
 				}
 			});
+		} else if (req.url === '/api/ssh/info' && req.method === 'GET') {
+			try {
+				const cfg = loadConfig();
+				const machine = getDefaultSshMachine(cfg);
+				if (!machine) {
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ configured: false, machines: cfg.sshMachines || [], defaultId: null }));
+					return;
+				}
+				
+				const port = machine.port || 22;
+				let passwordHint = '未设置密码';
+				if (machine.password) {
+					passwordHint = `密码长度: ${machine.password.length} 字符`;
+				}
+				
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({
+					configured: true,
+					host: machine.host,
+					port: port,
+					user: machine.user,
+					passwordHint: passwordHint,
+					machines: cfg.sshMachines || [],
+					defaultId: cfg.defaultSshMachine
+				}));
+			} catch (error) {
+				console.error('[Web API] SSH info error:', error);
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url === '/api/ssh/list' && req.method === 'GET') {
+			try {
+				const cfg = loadConfig();
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({
+					machines: cfg.sshMachines || [],
+					defaultId: cfg.defaultSshMachine
+				}));
+			} catch (error) {
+				console.error('[Web API] SSH list error:', error);
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url.startsWith('/api/ssh/add') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { name, host, port, user, password } = JSON.parse(body);
+					if (!name || !host || !user) {
+						throw new Error('名称、主机和用户不能为空');
+					}
+					
+					const cfg = loadConfig();
+					const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+					const newMachine = {
+						id,
+						name: name.trim(),
+						host: host.trim(),
+						port: port || 22,
+						user: user.trim(),
+						password: password || ''
+					};
+					
+					if (!cfg.sshMachines) cfg.sshMachines = [];
+					cfg.sshMachines.push(newMachine);
+					
+					if (cfg.sshMachines.length === 1) {
+						cfg.defaultSshMachine = id;
+					}
+					
+					saveConfig(cfg);
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ 
+						success: true, 
+						machine: newMachine,
+						machines: cfg.sshMachines,
+						defaultId: cfg.defaultSshMachine
+					}));
+				} catch (error) {
+					console.error('[Web API] SSH add error:', error);
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+			});
+		} else if (req.url.startsWith('/api/ssh/delete') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { id } = JSON.parse(body);
+					const cfg = loadConfig();
+					
+					cfg.sshMachines = cfg.sshMachines.filter(m => m.id !== id);
+					
+					if (cfg.defaultSshMachine === id) {
+						cfg.defaultSshMachine = cfg.sshMachines.length > 0 ? cfg.sshMachines[0].id : null;
+					}
+					
+					saveConfig(cfg);
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ 
+						success: true,
+						machines: cfg.sshMachines,
+						defaultId: cfg.defaultSshMachine
+					}));
+				} catch (error) {
+					console.error('[Web API] SSH delete error:', error);
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+			});
+		} else if (req.url.startsWith('/api/ssh/set-default') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { id } = JSON.parse(body);
+					const cfg = loadConfig();
+					
+					const machine = cfg.sshMachines.find(m => m.id === id);
+					if (!machine) {
+						throw new Error('SSH机器不存在');
+					}
+					
+					cfg.defaultSshMachine = id;
+					saveConfig(cfg);
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ 
+						success: true,
+						defaultId: cfg.defaultSshMachine
+					}));
+				} catch (error) {
+					console.error('[Web API] SSH set-default error:', error);
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+			});
+		} else if (req.url.startsWith('/api/ssh/connect-by-id') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { id } = JSON.parse(body);
+					const cfg = loadConfig();
+					
+					const machine = cfg.sshMachines.find(m => m.id === id);
+					if (!machine) {
+						throw new Error('SSH机器不存在');
+					}
+					
+					const port = machine.port || 22;
+					const sshUser = machine.user;
+					const sshHost = machine.host;
+					
+					console.log(`[Web API] Opening SSH connection to: ${sshUser}@${sshHost}:${port}`);
+					
+					const platform = os.platform();
+					let command, args;
+					
+					if (platform === 'win32') {
+						command = 'cmd';
+						if (port === 22) {
+							args = ['/c', 'start', 'cmd', '/k', `ssh ${sshUser}@${sshHost}`];
+						} else {
+							args = ['/c', 'start', 'cmd', '/k', `ssh -p ${port} ${sshUser}@${sshHost}`];
+						}
+					} else if (platform === 'darwin') {
+						if (port === 22) {
+							command = 'osascript';
+							args = ['-e', `tell application "Terminal" to do script "ssh ${sshUser}@${sshHost}"`];
+						} else {
+							command = 'osascript';
+							args = ['-e', `tell application "Terminal" to do script "ssh -p ${port} ${sshUser}@${sshHost}"`];
+						}
+					} else {
+						if (port === 22) {
+							command = 'x-terminal-emulator';
+							args = ['-e', 'ssh', sshUser + '@' + sshHost];
+						} else {
+							command = 'x-terminal-emulator';
+							args = ['-e', 'ssh', '-p', String(port), sshUser + '@' + sshHost];
+						}
+					}
+					
+					spawn(command, args, { detached: true, stdio: 'ignore', shell: true }).unref();
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ success: true, message: `SSH connection opened to ${sshUser}@${sshHost}` }));
+				} catch (error) {
+					console.error('[Web API] SSH connect by id error:', error);
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+			});
+		} else if (req.url === '/api/ssh/connect' && req.method === 'POST') {
+			try {
+				const cfg = loadConfig();
+				const remote = cfg.remote;
+				if (!remote || !remote.host || !remote.user) {
+					throw new Error('SSH未配置，请在配置文件中设置');
+				}
+				
+				const port = remote.port || 22;
+				const sshUser = remote.user;
+				const sshHost = remote.host;
+				
+				console.log(`[Web API] Opening SSH: ${sshUser}@${sshHost}:${port}`);
+				
+				const platform = os.platform();
+				if (platform === 'win32') {
+					spawn('cmd', ['/c', 'start', 'cmd', '/k', `ssh ${sshUser}@${sshHost}`], { detached: true, stdio: 'ignore', shell: true }).unref();
+				} else if (platform === 'darwin') {
+					spawn('osascript', ['-e', `tell application "Terminal" to do script "ssh ${sshUser}@${sshHost}"`], { detached: true, stdio: 'ignore' }).unref();
+				} else {
+					spawn('x-terminal-emulator', ['-e', 'ssh', sshUser + '@' + sshHost], { detached: true, stdio: 'ignore' }).unref();
+				}
+				
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: 'SSH连接已打开' }));
+			} catch (error) {
+				console.error('[Web API] SSH error:', error);
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
 		} else if (req.url === '/api/sync' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => {
@@ -1201,9 +1459,9 @@ async function startWebServer() {
 						res.writeHead(200, { 'Content-Type': 'application/json' });
 						res.end(JSON.stringify({ message: `Successfully backed up ${game.name} locally.` }));
 					} else {
-						const remote = cfg.remote;
+						const remote = getDefaultSshMachine(cfg);
 						if (!remote || !remote.host || !remote.user) {
-							throw new Error('Remote configuration is incomplete.');
+							throw new Error('SSH未配置，请先在SSH管理中添加机器');
 						}
 						await backupBoth(game, remote, normalizedDir);
 

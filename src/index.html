@@ -785,6 +785,7 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h1>🕹️ GSM</h1>
+                <button onclick="connectSSH()" style="position: absolute; right: 10px; top: 10px; padding: 6px 12px; background: #1a1a1a; border: 1px solid var(--border); color: var(--text-main); border-radius: 6px; cursor: pointer; font-size: 0.85em;">🔗 SSH</button>
                 <div class="sidebar-actions">
                     <button class="primary" onclick="showAddGameModal()">添加游戏</button>
                     <button onclick="openBackupsFolder()">查看备份</button>
@@ -919,6 +920,20 @@
             } catch (e) {
                 showToast(e.message, 'error');
             }
+        }
+
+        // 连接SSH
+        function connectSSH() {
+            fetch('/api/ssh/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            }).then(r => r.json())
+              .then(data => {
+                  if (data.error) throw new Error(data.error);
+                  showToast('正在打开SSH连接...', 'success');
+              })
+              .catch(e => showToast(e.message, 'error'));
         }
 
         // 获取游戏列表

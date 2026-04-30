@@ -117,6 +117,29 @@ async function openBackupDir() {
 	}
 }
 
+async function openWebPage() {
+	const port = 9123;
+	const url = `http://localhost:${port}`;
+	console.log(`正在检查 Web 服务器状态...`);
+	
+	const portAvailable = await isPortAvailable(port);
+	if (portAvailable) {
+		console.log('Web 服务器未启动，正在启动...');
+		await startWebServer();
+	}
+	
+	console.log(`正在打开 Web 页面：${url}`);
+	try {
+		const platform = os.platform();
+		const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
+		spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
+		console.log('浏览器已打开。');
+	} catch (e) {
+		console.error('无法自动打开浏览器:', e.message);
+		console.log(`请手动访问：${url}`);
+	}
+}
+
 function getRemoteDir(game, remote) {
 	if (game.remoteFullPath && typeof game.remoteFullPath === 'string' && game.remoteFullPath.trim().length > 0) {
 		return game.remoteFullPath.trim().replace(/\\/g, '/');
@@ -148,17 +171,20 @@ async function pickOrCreateGame(cfg, preselectName) {
 		return matched;
 	}
 
-	const choices = cfg.games.map((g, idx) => ({ name: `${g.name}  - ${g.localPath}`, value: idx }));
-	if (cfg.games.length > 0) {
-		choices.push(new inquirer.Separator());
-	}
-	choices.push({ name: '新建游戏', value: -1 });
-	choices.push({ name: '打开存档备份文件夹', value: 'openBackupDir' });
-	choices.push({ name: '编辑配置文件', value: 'editConfig' });
-	choices.push({ name: '退出程序', value: 'exit' });
+	const choices = cfg.games.map((g, idx) => {
+		const key = idx + 1;
+		return { name: `[${key}] ${g.name}`, value: idx };
+	});
+	
+	choices.push(new inquirer.Separator('--- 其他选项 ---'));
+	choices.push({ name: '[N] 新建游戏', value: 'create' });
+	choices.push({ name: '[F] 打开备份文件夹', value: 'openBackupDir' });
+	choices.push({ name: '[E] 编辑配置文件', value: 'editConfig' });
+	choices.push({ name: '[W] 打开Web页面', value: 'openWeb' });
+	choices.push({ name: '[Q] 退出程序', value: 'exit' });
 
 	const { selection } = await inquirer.prompt([
-		{ type: 'list', name: 'selection', message: '选择一个游戏或操作：', choices, pageSize: 15 }
+		{ type: 'list', name: 'selection', message: '选择一个游戏或操作（按对应键+回车）：', choices, pageSize: 15 }
 	]);
 
 	if (selection === 'editConfig') {
@@ -169,12 +195,16 @@ async function pickOrCreateGame(cfg, preselectName) {
 		await openBackupDir();
 		return null;
 	}
-	if (selection === -1) {
-		return await createGame(cfg);
+	if (selection === 'openWeb') {
+		await openWebPage();
+		return null;
 	}
 	if (selection === 'exit') {
 		console.log('程序退出。');
 		process.exit(0);
+	}
+	if (selection === 'create') {
+		return await createGame(cfg);
 	}
 	return cfg.games[selection];
 }
@@ -459,19 +489,33 @@ async function syncRemoteToLocal_SFTP(game, remote) {
 	});
 }
 
-async function writeBackupLog(root, game, type, filename = 'backup.log') {
+async function writeBackupLog(root, game, type, filename = 'backup.log', syncDirection = null) {
 	const logPath = path.join(root, filename);
-	const content = [
+	const logInfo = [
 		`Timestamp: ${new Date().toISOString()}`,
 		`Game: ${game.name}`,
 		`Type: ${type}`,
 		`Local Path: ${game.localPath}`,
 		`Remote Path: ${game.remoteFullPath || 'N/A'}`,
-		`Status: Success`,
-		'----------------------------------------',
-		''
-	].join('\n');
-	await fse.appendFile(logPath, content);
+		`Status: Success`
+	];
+	if (syncDirection) {
+		logInfo.push(`Direction: ${syncDirection}`);
+	}
+	logInfo.push('----------------------------------------', '');
+	await fse.appendFile(logPath, logInfo.join('\n'));
+	
+	if (syncDirection) {
+		const metaPath = path.join(root, 'displayName.json');
+		let meta = {};
+		if (fs.existsSync(metaPath)) {
+			try {
+				meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+			} catch (err) {}
+		}
+		meta.syncDirection = syncDirection;
+		await fs.promises.writeFile(metaPath, JSON.stringify(meta), 'utf8');
+	}
 }
 
 async function backupBoth(game, remote, direction) {
@@ -488,21 +532,24 @@ async function backupBoth(game, remote, direction) {
 
 	let logName = 'backup.log';
 	let type = 'Full Backup';
+	let logDirection = null;
 	if (direction === 'push') {
 		logName = 'local-to-remote.log';
 		type = 'Pre-push Backup (Local -> Remote)';
+		logDirection = 'local-to-remote';
 	} else if (direction === 'pull') {
 		logName = 'remote-to-local.log';
 		type = 'Pre-pull Backup (Remote -> Local)';
+		logDirection = 'remote-to-local';
 	}
-	await writeBackupLog(root, game, type, logName);
+	await writeBackupLog(root, game, type, logName, logDirection);
 }
 
 async function backupLocalOnly(game) {
 	const root = path.join(BACKUP_DIR, `${game.name}_${timestamp()}`);
 	const localDest = path.join(root, 'local');
 	await backupLocal(game, localDest);
-	await writeBackupLog(root, game, 'Local Only Backup', 'local-backup.log');
+	await writeBackupLog(root, game, 'Local Only Backup', 'local-backup.log', null);
 	console.log(`本地存档备份已完成（仅备份模式）：${localDest}`);
 }
 
@@ -596,18 +643,25 @@ async function resolveDirection(argDirection) {
 		console.log(`已通过命令行参数选择操作：${directionLabel(mappedFromArg)}`);
 		return mappedFromArg;
 	}
+	
 	const { direction } = await inquirer.prompt([
 		{
 			type: 'list',
 			name: 'direction',
-			message: '选择操作：',
+			message: '选择操作（按对应键+回车）：',
 			choices: [
-				{ name: '本地 -> 远程（用本地覆盖远程）', value: 'push' },
-				{ name: '远程 -> 本地（用远程覆盖本地）', value: 'pull' },
-				{ name: '仅备份本地存档', value: 'backupLocal' }
+				{ name: '[1] 本地 -> 远程（用本地覆盖远程）', value: 'push' },
+				{ name: '[2] 远程 -> 本地（用远程覆盖本地）', value: 'pull' },
+				{ name: '[3] 仅备份本地存档', value: 'backupLocal' },
+				{ name: '[R] 返回上级菜单', value: 'back' }
 			]
 		}
 	]);
+	
+	if (direction === 'back') {
+		return null;
+	}
+	
 	return direction;
 }
 
@@ -885,12 +939,27 @@ async function startWebServer() {
 								backupTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
 							}
 							
+							let displayName = null;
+							let syncDirection = null;
+							const metaPath = path.join(backupPath, 'displayName.json');
+							if (fs.existsSync(metaPath)) {
+								try {
+									const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+									displayName = meta.displayName || null;
+									syncDirection = meta.syncDirection || null;
+								} catch (err) {
+									console.error(`Error reading displayName for ${backupName}:`, err);
+								}
+							}
+							
 							backupList.push({
 								name: backupName,
 								time: backupTime.toISOString(),
 								size: size,
 								hasLocal,
-								hasRemote
+								hasRemote,
+								displayName,
+								syncDirection
 							});
 						} catch (err) {
 							console.error(`Error reading backup ${backupName}:`, err);
@@ -933,6 +1002,39 @@ async function startWebServer() {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: error.message }));
 			}
+		} else if (req.url.startsWith('/api/backups/') && req.url.endsWith('/rename') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const parts = req.url.split('/');
+					const gameName = decodeURIComponent(parts[3]);
+					const backupName = decodeURIComponent(parts[4]);
+					
+					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
+						throw new Error('Invalid backup name');
+					}
+					
+					const { displayName } = JSON.parse(body);
+					if (!displayName || typeof displayName !== 'string') {
+						throw new Error('Invalid display name');
+					}
+					
+					const backupPath = path.join(BACKUP_DIR, backupName);
+					if (!fs.existsSync(backupPath)) {
+						throw new Error('Backup not found');
+					}
+					
+					const metaPath = path.join(backupPath, 'displayName.json');
+					await fs.promises.writeFile(metaPath, JSON.stringify({ displayName }), 'utf8');
+					
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: 'Backup renamed successfully' }));
+				} catch (error) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
 		} else if (req.url.startsWith('/api/backups/') && req.url.endsWith('/restore') && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
@@ -1234,7 +1336,14 @@ async function run() {
 		}
 
 		const direction = await resolveDirection(args.direction);
-
+		
+		if (direction === null) {
+			console.log('\n返回上级菜单...');
+			delete args.game;
+			delete args.direction;
+			continue;
+		}
+		
 		if (direction === 'backupLocal') {
 			await backupLocalOnly(game);
 		} else {

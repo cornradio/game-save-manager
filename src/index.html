@@ -557,6 +557,12 @@
             font-weight: 600;
         }
 
+        .backup-table th.col-name { width: 20%; }
+        .backup-table th.col-time { width: 25%; }
+        .backup-table th.col-size { width: 12%; }
+        .backup-table th.col-type { width: 25%; }
+        .backup-table th.col-actions { width: 18%; text-align: center; }
+
         .backup-table td {
             padding: 10px 12px;
             font-size: 0.85em;
@@ -570,6 +576,38 @@
 
         .backup-table tbody tr:hover {
             background: rgba(84, 250, 6, 0.05);
+        }
+
+        .backup-table .backup-name-cell {
+            max-width: 200px;
+        }
+
+        .backup-name-text {
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: 0.2s ease;
+            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .backup-name-text:hover {
+            background: rgba(84, 250, 6, 0.15);
+            color: var(--accent);
+        }
+
+        .backup-name-input {
+            background: rgba(84, 250, 6, 0.1);
+            border: 1px solid var(--accent);
+            color: var(--text-main);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: inherit;
+            width: 150px;
+            outline: none;
         }
 
         .backup-table .backup-time {
@@ -587,31 +625,107 @@
             font-size: 0.8em;
         }
 
-        .backup-table .backup-actions {
-            display: flex;
-            gap: 6px;
+        .sync-type {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
         }
 
-        .backup-table .backup-actions button {
-            padding: 4px 8px;
-            border-radius: 4px;
+        .sync-type.local-only .type-label {
+            color: #54fa06;
+        }
+
+        .sync-type.remote-only .type-label {
+            color: #6eb5ff;
+        }
+
+        .sync-type.push .type-label:first-child {
+            color: #54fa06;
+        }
+
+        .sync-type.push .type-arrow {
+            color: var(--accent);
+            font-size: 1.2em;
+        }
+
+        .sync-type.push .type-label:last-child {
+            color: #6eb5ff;
+        }
+
+        .sync-type.pull .type-label:first-child {
+            color: #6eb5ff;
+        }
+
+        .sync-type.pull .type-arrow {
+            color: var(--accent);
+            font-size: 1.2em;
+        }
+
+        .sync-type.pull .type-label:last-child {
+            color: #54fa06;
+        }
+
+        .sync-type.bi-directional .type-label:first-child {
+            color: #54fa06;
+        }
+
+        .sync-type.bi-directional .type-arrow {
+            color: var(--accent);
+            font-size: 1.2em;
+        }
+
+        .sync-type.bi-directional .type-label:last-child {
+            color: #6eb5ff;
+        }
+
+        .backup-table .backup-actions {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .backup-table .icon-btn {
+            width: 32px;
+            height: 32px;
+            padding: 6px;
+            border-radius: 6px;
             border: 1px solid var(--border);
             background: #151515;
             color: var(--text-main);
             cursor: pointer;
             transition: 0.2s ease;
-            font-size: 0.8em;
-            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
-        .backup-table .backup-actions button:hover {
+        .backup-table .icon-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .backup-table .icon-btn:hover {
             border-color: var(--accent);
             color: var(--accent);
+            background: rgba(84, 250, 6, 0.1);
         }
 
-        .backup-table .backup-actions button.danger:hover {
+        .backup-table .icon-btn.danger:hover {
             border-color: #ff6b6b;
             color: #ff6b6b;
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .backup-header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .backup-header-controls .control-label {
+            font-size: 0.85em;
+            color: var(--text-soft);
         }
 
         /* Toast Notification */
@@ -954,6 +1068,13 @@
                 <!-- 板块3: 备份列表 -->
                 <div class="section">
                     <h3>备份管理</h3>
+                    <div class="backup-header-controls">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="no-confirm-delete-toggle" onchange="toggleNoConfirmDelete(this)">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="control-label">删除无需确认</span>
+                    </div>
                     <div style="overflow-x: auto; margin-top: 1em;">
                         ${backups.length === 0 
                             ? '<div class="empty-state"><p>暂无备份</p></div>'
@@ -961,23 +1082,57 @@
                             <table class="backup-table">
                                 <thead>
                                     <tr>
-                                        <th>备份时间</th>
-                                        <th>大小</th>
-                                        <th>类型</th>
-                                        <th>操作</th>
+                                        <th class="col-name">名称</th>
+                                        <th class="col-time">备份时间</th>
+                                        <th class="col-size">大小</th>
+                                        <th class="col-type">类型</th>
+                                        <th class="col-actions">操作</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${backups.map(backup => `
-                                        <tr>
+                                        <tr data-backup-name="${backup.name}">
+                                            <td class="backup-name-cell">
+                                                <span class="backup-name-text" onclick="editBackupName(this, '${backup.name}')" title="点击修改名称">${backup.displayName || backup.name}</span>
+                                            </td>
                                             <td class="backup-time">${formatTime(backup.time)}</td>
                                             <td class="backup-size">${formatSize(backup.size)}</td>
-                                            <td class="backup-type">${backup.hasLocal ? '本地' : ''}${backup.hasLocal && backup.hasRemote ? ' + ' : ''}${backup.hasRemote ? '远程' : ''}</td>
+                                            <td class="backup-type">
+                                                ${backup.hasLocal && !backup.hasRemote ? '<span class="sync-type local-only"><span class="type-label">仅本地</span></span>' : ''}
+                                                ${!backup.hasLocal && backup.hasRemote ? '<span class="sync-type remote-only"><span class="type-label">仅远程</span></span>' : ''}
+                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'local-to-remote' ? `
+                                                    <span class="sync-type push">
+                                                        <span class="type-label">本地</span>
+                                                        <span class="type-arrow">→</span>
+                                                        <span class="type-label">远程</span>
+                                                    </span>
+                                                ` : ''}
+                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'remote-to-local' ? `
+                                                    <span class="sync-type pull">
+                                                        <span class="type-label">远程</span>
+                                                        <span class="type-arrow">→</span>
+                                                        <span class="type-label">本地</span>
+                                                    </span>
+                                                ` : ''}
+                                                ${backup.hasLocal && backup.hasRemote && !backup.syncDirection ? `
+                                                    <span class="sync-type bi-directional">
+                                                        <span class="type-label">本地</span>
+                                                        <span class="type-arrow">⟷</span>
+                                                        <span class="type-label">远程</span>
+                                                    </span>
+                                                ` : ''}
+                                            </td>
                                             <td>
                                                 <div class="backup-actions">
-                                                    <button onclick="openBackupFolder('${backup.name}')">打开文件夹</button>
-                                                    <button onclick="restoreBackup('${backup.name}')">回滚到此存档</button>
-                                                    <button class="danger" onclick="deleteBackup('${backup.name}')">删除</button>
+                                                    <button class="icon-btn" onclick="openBackupFolder('${backup.name}')" title="打开文件夹">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                                                    </button>
+                                                    <button class="icon-btn restore" onclick="restoreBackup('${backup.name}')" title="回滚到此存档">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                                                    </button>
+                                                    <button class="icon-btn danger" onclick="deleteBackup('${backup.name}')" title="删除备份">
+                                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -1015,7 +1170,7 @@
         // 删除备份
         async function deleteBackup(backupName) {
             if (!selectedGame) return;
-            if (!confirm(`确定要删除备份 "${backupName}" 吗？`)) return;
+            if (!noConfirmDelete && !confirm(`确定要删除备份 "${backupName}" 吗？`)) return;
             
             try {
                 const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/${encodeURIComponent(backupName)}`, {
@@ -1029,6 +1184,60 @@
             } catch (e) {
                 showToast(e.message, 'error');
             }
+        }
+
+        // 修改备份名称
+        async function editBackupName(element, backupName) {
+            if (!selectedGame) return;
+            
+            const currentName = element.textContent;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'backup-name-input';
+            input.value = currentName;
+            
+            element.textContent = '';
+            element.appendChild(input);
+            input.focus();
+            input.select();
+            
+            const finishEdit = async () => {
+                const newName = input.value.trim();
+                if (newName && newName !== currentName) {
+                    try {
+                        const r = await fetch(`/api/backups/${encodeURIComponent(selectedGame.name)}/${encodeURIComponent(backupName)}/rename`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ displayName: newName })
+                        });
+                        const result = await r.json();
+                        if (!r.ok) throw new Error(result.error || '重命名失败');
+                        showToast('名称已修改', 'success');
+                        await renderGameDetails();
+                    } catch (e) {
+                        showToast(e.message, 'error');
+                        element.textContent = currentName;
+                    }
+                } else {
+                    element.textContent = currentName;
+                }
+            };
+            
+            input.addEventListener('blur', finishEdit);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    element.textContent = currentName;
+                }
+            });
+        }
+
+        let noConfirmDelete = false;
+
+        function toggleNoConfirmDelete(checkbox) {
+            noConfirmDelete = checkbox.checked;
         }
 
         // 回滚备份

@@ -3,38 +3,32 @@
     {
       "name": "⛏️ mc dungeons",
       "localPath": "C:\\Users\\kasus\\Saved Games\\Mojang Studios\\Dungeons",
-      "remoteFullPath": "/C:/Users/rober/Saved Games/Mojang Studios/Dungeons",
+      "remoteFullPath": "/C:/Users/kasus/Saved Games/Mojang Studios/Dungeons",
       "nobackup": false
     },
     {
       "name": "☢️辐射4",
       "localPath": "C:\\Users\\kasus\\Documents\\My Games\\Fallout4\\Saves",
-      "remoteFullPath": "/C:/Users/rober/Documents/My Games/Fallout4/Saves"
-    },
-    {
-      "name": "🧙🏻‍♀️魔女审判",
-      "localPath": "C:\\Users\\kasus\\AppData\\LocalLow\\Re,AER",
-      "remoteFullPath": "/C:/Users/rober/AppData/LocalLow/Re,AER",
-      "nobackup": false
-    },
-    {
-      "name": "STS",
-      "localPath": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\SlayTheSpire\\saves",
-      "remoteFullPath": "/C:/Users/rober/Program Files (x86)/Steam/steamapps/common/SlayTheSpire/saves",
-      "nobackup": false
+      "remoteFullPath": "/C:/Users/kasus/Documents/My Games/Fallout4/Saves"
     },
     {
       "name": "📂SFTP-sync",
       "localPath": "C:\\Users\\kasus\\Downloads\\da",
-      "remoteFullPath": "/C:/Users/rober/Downloads/da",
+      "remoteFullPath": "/C:/Users/kasus/Downloads/da",
       "nobackup": true
+    },
+    {
+      "name": "🛹 SessionGame",
+      "localPath": "C:\\Users\\kasus\\AppData\\Local\\SessionGame\\Saved",
+      "remoteFullPath": "/C:/Users/kasus/AppData/Local/SessionGame/Saved",
+      "nobackup": false
     }
   ],
   "remote": {
-    "host": "192.168.31.201",
+    "host": "192.168.31.203",
     "port": 22,
-    "user": "rogallyx",
-    "password": "kali"
+    "user": "kasus",
+    "password": "qqqq"
   },
   "preferScpTool": "auto"
 }

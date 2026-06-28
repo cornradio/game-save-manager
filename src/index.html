@@ -50,7 +50,8 @@
         }
 
         .sidebar-header {
-            padding: 1.5em;
+            position: relative;
+            padding: 1em 1.5em;
             border-bottom: 1px solid var(--border);
         }
 
@@ -101,10 +102,10 @@
 
         .game-item-actions {
             position: absolute;
-            top: 0.5em;
-            right: 0.5em;
+            top: 0.25em;
+            right: 0.4em;
             display: flex;
-            gap: 4px;
+            gap: 2px;
             opacity: 0;
             transition: opacity 0.2s;
         }
@@ -304,9 +305,9 @@
         .game-item {
             background: rgba(20, 20, 20, 0.5);
             border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 1em;
-            margin-bottom: 0.8em;
+            border-radius: 8px;
+            padding: 0.45em 0.7em;
+            margin-bottom: 0.35em;
             cursor: pointer;
             transition: 0.25s;
         }
@@ -322,15 +323,17 @@
         }
 
         .game-item h3 {
-            margin: 0 0 0.5em 0;
-            font-size: 1rem;
+            margin: 0;
+            font-size: 0.88rem;
             font-weight: 600;
             color: #fff;
+            line-height: 1.3;
         }
 
         .game-item .backup-count {
-            font-size: 0.85em;
+            font-size: 0.72em;
             color: var(--text-soft);
+            line-height: 1.3;
         }
 
         /* 右侧详情面板 */
@@ -342,60 +345,77 @@
         }
 
         .content-header {
-            padding: 1.5em;
+            padding: 1em 1.5em;
             border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
         }
 
         .content-header h2 {
             margin: 0;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             font-weight: 600;
             color: #fff;
+            flex-shrink: 0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .header-actions button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        .header-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .header-actions button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .header-actions button.primary:hover {
+            background: #6aff1a;
         }
 
         .content-body {
             flex: 1;
             overflow-y: auto;
-            padding: 1.5em;
+            padding: 1em 1.5em;
         }
 
         .section {
             background: var(--panel);
             border: 1px solid var(--border);
             border-radius: var(--radius);
-            padding: 1.5em;
-            margin-bottom: 1.5em;
+            padding: 1em;
+            margin-bottom: 1em;
         }
 
         .section h3 {
-            margin: 0 0 1em 0;
-            font-size: 1.1rem;
+            margin: 0 0 0.6em 0;
+            font-size: 0.95rem;
             font-weight: 600;
             color: #fff;
             border-bottom: 1px solid var(--border);
-            padding-bottom: 0.5em;
-        }
-
-        .info-item {
-            margin: 0.8em 0;
-        }
-
-        .info-item label {
-            display: block;
-            font-size: 0.85em;
-            color: var(--text-soft);
-            margin-bottom: 0.3em;
-        }
-
-        .info-item .value {
-            font-family: monospace;
-            background: #111;
-            padding: 0.5em;
-            border-radius: 6px;
-            border: 1px solid #1a1a1a;
-            color: var(--text-main);
-            font-size: 0.9em;
-            word-break: break-all;
+            padding-bottom: 0.4em;
         }
 
 
@@ -557,11 +577,11 @@
             font-weight: 600;
         }
 
-        .backup-table th.col-name { width: 20%; }
-        .backup-table th.col-time { width: 25%; }
-        .backup-table th.col-size { width: 12%; }
-        .backup-table th.col-type { width: 25%; }
-        .backup-table th.col-actions { width: 18%; text-align: center; }
+        .backup-table th.col-name { width: 30%; }
+        .backup-table th.col-time { width: 22%; }
+        .backup-table th.col-size { width: 10%; }
+        .backup-table th.col-type { width: 18%; }
+        .backup-table th.col-actions { width: 20%; text-align: center; }
 
         .backup-table td {
             padding: 10px 12px;
@@ -776,6 +796,309 @@
                 transform: translateX(20px);
             }
         }
+
+        /* 设置按钮 */
+        .settings-gear {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: #141414;
+            color: var(--text-soft);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85em;
+            transition: 0.2s ease;
+            padding: 0;
+            flex-shrink: 0;
+        }
+
+        .settings-gear:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* 设置弹出菜单 */
+        .settings-menu {
+            display: none;
+            position: fixed;
+            background: #1d1d1d;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 4px;
+            z-index: 500;
+            min-width: 170px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+        }
+
+        .settings-menu.show {
+            display: block;
+        }
+
+        .settings-menu button {
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            background: none;
+            border: none;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.85em;
+            text-align: left;
+            border-radius: 4px;
+            transition: 0.15s ease;
+        }
+
+        .settings-menu button:hover {
+            background: rgba(84, 250, 6, 0.1);
+            color: var(--accent);
+        }
+
+        /* 底部添加按钮 */
+        .sidebar-add {
+            padding: 0.5em 1em;
+            border-top: 1px solid var(--border);
+        }
+
+        .sidebar-add button {
+            width: 100%;
+            padding: 7px 12px;
+            background: var(--accent);
+            color: #000;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.82em;
+            font-weight: 600;
+            transition: 0.2s ease;
+        }
+
+        .sidebar-add button:hover {
+            background: #6aff1a;
+        }
+
+        /* 紧凑路径显示 */
+        .paths-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            margin-bottom: 0.8em;
+        }
+
+        .paths-compact .path-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78em;
+        }
+
+        .paths-compact .path-row .plabel {
+            color: var(--text-soft);
+            min-width: 48px;
+        }
+
+        .paths-compact .path-row .pval {
+            color: var(--text-soft);
+            font-family: monospace;
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .paths-compact .path-row button {
+            padding: 2px 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.9em;
+            transition: 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .paths-compact .path-row button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        /* 分页控件 */
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 0.8em;
+            padding-top: 0.6em;
+            border-top: 1px solid var(--border);
+        }
+
+        .pagination button {
+            padding: 4px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: 0.2s ease;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .pagination button:disabled {
+            opacity: 0.3;
+            cursor: default;
+        }
+
+        .pagination span {
+            font-size: 0.8em;
+            color: var(--text-soft);
+        }
+
+        /* 今天标签 */
+        .today-tag {
+            display: inline-block;
+            background: rgba(84, 250, 6, 0.15);
+            color: var(--accent);
+            font-size: 0.7em;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-left: 5px;
+            font-weight: 600;
+            vertical-align: middle;
+        }
+
+        /* 全屏设置卡片 */
+        .settings-modal {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            background: rgba(0, 0, 0, 0.7) !important;
+            z-index: 2000 !important;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            min-width: 0 !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+        }
+
+        .settings-modal.show {
+            display: flex !important;
+        }
+
+        .settings-card {
+            background: #1d1d1d;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.5em;
+            min-width: 420px;
+            max-width: 520px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .settings-card h3 {
+            margin: 0 0 0.8em 0;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .settings-row {
+            margin-bottom: 0.8em;
+        }
+
+        .settings-row label {
+            display: block;
+            font-size: 0.8em;
+            color: var(--text-soft);
+            margin-bottom: 0.3em;
+        }
+
+        .settings-row .mono {
+            font-family: monospace;
+            font-size: 0.82em;
+            color: var(--text-soft);
+            word-break: break-all;
+            margin-bottom: 0.3em;
+        }
+
+        .settings-row .btn-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .settings-row .btn-row button {
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.8em;
+            transition: 0.2s ease;
+        }
+
+        .settings-row .btn-row button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .settings-row select {
+            width: 100%;
+            background: #141414;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 0.85em;
+        }
+
+        /* 操作卡片 */
+        .ops-card .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .ops-card .button-group button {
+            padding: 9px 14px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: 0.2s ease;
+            font-size: 0.85em;
+        }
+
+        .ops-card .button-group button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .ops-card .button-group button.primary {
+            background: var(--accent);
+            color: #000;
+            border-color: var(--accent);
+        }
+
+        .ops-card .button-group button.primary:hover {
+            background: #6aff1a;
+        }
     </style>
 </head>
 
@@ -785,23 +1108,22 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <h1>🕹️ GSM</h1>
-                <button onclick="connectSSH()" style="position: absolute; right: 10px; top: 10px; padding: 6px 12px; background: #1a1a1a; border: 1px solid var(--border); color: var(--text-main); border-radius: 6px; cursor: pointer; font-size: 0.85em;">🔗 SSH</button>
-                <div class="sidebar-actions">
-                    <button class="primary" onclick="showAddGameModal()">添加游戏</button>
-                    <button onclick="openBackupsFolder()">查看备份</button>
-                    <button onclick="openConfig()">修改配置</button>
+                <div style="display:flex; gap:4px; position:absolute; right:10px; top:12px;">
+                    <button class="settings-gear" onclick="openBackupsFolder()" title="备份文件夹">📂</button>
+                    <button class="settings-gear" onclick="openConfig()" title="修改配置">📜</button>
+                    <button class="settings-gear" onclick="connectSSH()" title="SSH">⛓</button>
                 </div>
             </div>
             <div class="game-list" id="game-list">
                 <!-- 游戏列表将在这里动态生成 -->
             </div>
+            <div class="sidebar-add">
+                <button onclick="showAddGameModal()">+ 添加游戏</button>
+            </div>
             <div class="sidebar-footer">
-                <div>
-                    <a href="https://github.com/cornradio/game-save-manager" target="_blank" rel="noopener noreferrer">GitHub</a>
-                </div>
                 <div class="copyright">
-                    © 2024 cornradio<br>
-                    仅供个人使用，禁止商用
+                    <a href="https://github.com/cornradio/game-save-manager" target="_blank" rel="noopener noreferrer">GitHub</a>
+                    © 2026 appstore.cornradio.org<br> 
                 </div>
             </div>
         </div>
@@ -810,6 +1132,7 @@
         <div class="main-content">
             <div class="content-header">
                 <h2 id="selected-game-name">请选择一个游戏</h2>
+                <div class="header-actions" id="header-actions"></div>
             </div>
             <div class="content-body" id="content-body">
                 <div class="empty-state">
@@ -819,6 +1142,7 @@
         </div>
     </div>
 
+    <div class="settings-modal" id="panel-settings-menu"></div>
     <div id="toast-container"></div>
 
     <!-- 游戏配置模态框 -->
@@ -996,15 +1320,22 @@
         // 渲染游戏详情
         async function renderGameDetails() {
             const header = document.getElementById('selected-game-name');
+            const headerActions = document.getElementById('header-actions');
             const body = document.getElementById('content-body');
 
             if (!selectedGame) {
                 header.textContent = '请选择一个游戏';
+                headerActions.innerHTML = '';
                 body.innerHTML = '<div class="empty-state"><p>从左侧选择一个游戏以查看详情</p></div>';
                 return;
             }
 
-            header.textContent = '';
+            header.textContent = selectedGame.name;
+
+            // Header action buttons
+            headerActions.innerHTML = `
+                <button class="settings-gear" onclick="togglePanelSettings(event)" title="设置">⚙</button>
+            `;
 
             // 获取备份列表
             let backups = [];
@@ -1040,28 +1371,28 @@
                 });
             }
 
-            // 获取当前定时设置
+            // 判断是否是今天
+            function isToday(isoString) {
+                const d = new Date(isoString);
+                const now = new Date();
+                return d.getFullYear() === now.getFullYear()
+                    && d.getMonth() === now.getMonth()
+                    && d.getDate() === now.getDate();
+            }
+
+            // 分页
+            const PAGE_SIZE = 20;
+            const totalPages = Math.max(1, Math.ceil(backups.length / PAGE_SIZE));
+            if (!selectedGame._page || selectedGame._page > totalPages) selectedGame._page = Math.max(1, totalPages);
+            const page = selectedGame._page;
+            const startIdx = (page - 1) * PAGE_SIZE;
+            const pageBackups = backups.slice(startIdx, startIdx + PAGE_SIZE);
+
             const currentSchedule = activeIntervals[selectedGame.name]?.minutes || 0;
 
             body.innerHTML = `
-                <!-- 板块1: 基础信息 -->
-                <div class="section info-section">
-                    <h1>${selectedGame.name}</h1>
-                    <div class="path-item">
-                        <span class="path-label">本地路径</span>
-                        <span class="path-value">${selectedGame.localPath}</span>
-                        <button class="path-button" onclick="openLocalFolder()">打开文件夹</button>
-                    </div>
-                    <div class="path-item">
-                        <span class="path-label">远程路径</span>
-                        <span class="path-value">${selectedGame.remoteFullPath || '未设置'}</span>
-                    </div>
-                </div>
-
-                
-                <!-- 板块2: 远程同步及本地备份 -->
-                <div class="section">
-                    <h3>远程同步及本地备份</h3>
+                <div class="section ops-card">
+                    <h3>操作</h3>
                     <div class="button-group">
                         <button onclick="performSync('push')">推送到远程 🏠 → 🌐</button>
                         <button onclick="performSync('pull')">下拉到本地 🌐 → 🏠</button>
@@ -1080,20 +1411,20 @@
                     </div>
                 </div>
 
-                <!-- 板块3: 备份列表 -->
                 <div class="section">
-                    <h3>备份管理</h3>
-                    <div class="backup-header-controls">
-                        <label class="toggle-switch">
-                            <input type="checkbox" id="no-confirm-delete-toggle" onchange="toggleNoConfirmDelete(this)">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="control-label">删除无需确认</span>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                        <h3 style="margin:0; border:none; padding:0;">备份管理 (${backups.length})</h3>
+                        <div style="display:flex; align-items:center; gap:6px; font-size:0.8em;">
+                            <label style="color:var(--text-soft); display:flex; align-items:center; gap:4px; cursor:pointer;">
+                                <input type="checkbox" id="no-confirm-delete-toggle" onchange="toggleNoConfirmDelete(this)" ${noConfirmDelete ? 'checked' : ''}>
+                                删除无需确认
+                            </label>
+                        </div>
                     </div>
-                    <div style="overflow-x: auto; margin-top: 1em;">
-                        ${backups.length === 0 
-                            ? '<div class="empty-state"><p>暂无备份</p></div>'
-                            : `
+                    ${backups.length === 0
+                        ? '<div class="empty-state"><p>暂无备份</p></div>'
+                        : `
+                        <div style="overflow-x:auto;">
                             <table class="backup-table">
                                 <thead>
                                     <tr>
@@ -1105,37 +1436,19 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${backups.map(backup => `
+                                    ${pageBackups.map(backup => `
                                         <tr data-backup-name="${backup.name}">
                                             <td class="backup-name-cell">
                                                 <span class="backup-name-text" onclick="editBackupName(this, '${backup.name}')" title="点击修改名称">${backup.displayName || backup.name}</span>
                                             </td>
-                                            <td class="backup-time">${formatTime(backup.time)}</td>
+                                            <td class="backup-time">${formatTime(backup.time)}${isToday(backup.time) ? '<span class="today-tag">今天</span>' : ''}</td>
                                             <td class="backup-size">${formatSize(backup.size)}</td>
                                             <td class="backup-type">
                                                 ${backup.hasLocal && !backup.hasRemote ? '<span class="sync-type local-only"><span class="type-label">仅本地</span></span>' : ''}
                                                 ${!backup.hasLocal && backup.hasRemote ? '<span class="sync-type remote-only"><span class="type-label">仅远程</span></span>' : ''}
-                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'local-to-remote' ? `
-                                                    <span class="sync-type push">
-                                                        <span class="type-label">本地</span>
-                                                        <span class="type-arrow">→</span>
-                                                        <span class="type-label">远程</span>
-                                                    </span>
-                                                ` : ''}
-                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'remote-to-local' ? `
-                                                    <span class="sync-type pull">
-                                                        <span class="type-label">远程</span>
-                                                        <span class="type-arrow">→</span>
-                                                        <span class="type-label">本地</span>
-                                                    </span>
-                                                ` : ''}
-                                                ${backup.hasLocal && backup.hasRemote && !backup.syncDirection ? `
-                                                    <span class="sync-type bi-directional">
-                                                        <span class="type-label">本地</span>
-                                                        <span class="type-arrow">⟷</span>
-                                                        <span class="type-label">远程</span>
-                                                    </span>
-                                                ` : ''}
+                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'local-to-remote' ? '<span class="sync-type push"><span class="type-label">本地</span><span class="type-arrow">→</span><span class="type-label">远程</span></span>' : ''}
+                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'remote-to-local' ? '<span class="sync-type pull"><span class="type-label">远程</span><span class="type-arrow">→</span><span class="type-label">本地</span></span>' : ''}
+                                                ${backup.hasLocal && backup.hasRemote && !backup.syncDirection ? '<span class="sync-type bi-directional"><span class="type-label">本地</span><span class="type-arrow">⟷</span><span class="type-label">远程</span></span>' : ''}
                                             </td>
                                             <td>
                                                 <div class="backup-actions">
@@ -1154,11 +1467,17 @@
                                     `).join('')}
                                 </tbody>
                             </table>
-                            `
-                        }
-                    </div>
+                        </div>
+                        ${totalPages > 1 ? `
+                        <div class="pagination">
+                            <button onclick="changeBackupPage(${page - 1})" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+                            <span>${page} / ${totalPages}</span>
+                            <button onclick="changeBackupPage(${page + 1})" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+                        </div>
+                        ` : ''}
+                        `
+                    }
                 </div>
-
             `;
         }
 
@@ -1255,6 +1574,55 @@
             noConfirmDelete = checkbox.checked;
         }
 
+        // 分页切换
+        function changeBackupPage(newPage) {
+            if (!selectedGame) return;
+            selectedGame._page = newPage;
+            renderGameDetails();
+        }
+
+        // 右侧面板设置菜单
+        function togglePanelSettings(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('panel-settings-menu');
+
+            menu.innerHTML = `
+                <div class="settings-card" onclick="event.stopPropagation()">
+                    <h3>设置</h3>
+                    <div class="settings-row">
+                        <label>本地路径</label>
+                        <div class="mono">${selectedGame.localPath}</div>
+                        <div class="btn-row">
+                            <button onclick="openLocalFolder(); closePanelSettings()">打开文件夹</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>远程路径</label>
+                        <div class="mono">${selectedGame.remoteFullPath || '未设置'}</div>
+                    </div>
+                    <div class="settings-row">
+                        <div class="btn-row">
+                            <button onclick="openBackupsFolder(); closePanelSettings()">打开备份文件夹</button>
+                        </div>
+                    </div>
+                    <div class="settings-row" style="text-align:right; margin-top:1em;">
+                        <button onclick="closePanelSettings()" style="padding:6px 16px; border-radius:6px; border:1px solid var(--border); background:#151515; color:var(--text-main); cursor:pointer; font-size:0.85em;">关闭</button>
+                    </div>
+                </div>
+            `;
+
+            menu.classList.toggle('show');
+        }
+
+        function closePanelSettings() {
+            document.getElementById('panel-settings-menu').classList.remove('show');
+        }
+
+        // 点击空白关闭设置菜单
+        document.addEventListener('click', () => {
+            closePanelSettings();
+        });
+
         // 回滚备份
         async function restoreBackup(backupName) {
             if (!selectedGame) return;
@@ -1310,6 +1678,7 @@
                 if (!r.ok) throw new Error(result.message || '同步失败');
                 showToast(result.message || '同步成功', 'success');
                 await fetchGames();
+                await renderGameDetails();
             } catch (e) {
                 showToast(e.message, 'error');
             }

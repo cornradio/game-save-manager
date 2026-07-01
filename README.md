@@ -1,42 +1,28 @@
-<img width="414" height="301" alt="Group 72 (2)" src="https://github.com/user-attachments/assets/b97e1e9e-d597-43c5-b22b-900e7f6d7d8b" />
+<img width="200" height="" alt="Group 72 (2)" src="https://github.com/user-attachments/assets/b97e1e9e-d597-43c5-b22b-900e7f6d7d8b" />
 
 
 # 🕹️ GSM
 
-> 游戏存档双端同步工具+游戏存档备份恢复工具（Windows 双端）
-> 
-> 本来是专门用来满足我自己的需求（学习版游戏存档在pc和win掌机间同步）而制作的工具
-> 
-> 经过我和cursor的共同努力和迭代，现在功能比较完善，即使不使用双端同步，他也是一个很好的本地游戏存档备份工具，界面直观操作简单。（唯一的缺点可能是安装比较复杂，这是nodejs的问题）
+> 游戏存档双端同步工具+游戏存档备份恢复工具
 
-<img width="2517" height="1751" alt="image" src="https://github.com/user-attachments/assets/aa3de200-b966-436a-8b36-77794e9fc115" />
-
+<img width="800" height="" alt="image" src="https://github.com/user-attachments/assets/24a881f8-7cbe-45c2-b797-f68d4292df74" />
 
 一个基于 Node.js 的交互式 CLI + WEB工具，支持：
 - 本地与远程（SSH）之间的双向同步：本地 -> 远程、远程 -> 本地
-- 仅备份本地存档（不会访问远程）
-- 同步前自动备份本地与远程存档到 `backups/` 目录
-- 自动创建本地/远程目录
+- 备份本地存档
+- 定时备份存档
 - 传输方式：
   - 默认使用 SFTP（内置库，无需外部命令，适合 Windows 双端）
   - 可选强制使用 scp/pscp（若系统已安装 `pscp` 或 `scp`）
 
-## node 环境安装
-程序使用nodejs 可以使用 nvm 安装
-https://github.com/coreybutler/nvm-windows
 
-```
-nvm install 20.11.1
-```
-WINDOWS 装完后要重启才能用
 
-## game-save-manager安装
+## 使用教程
 
 ```bash
-npm install
-（安装依赖）
-npm start
-（启动game-save-manager）
+npm install #安装依赖
+npm start #启动程序（命令行客户端）
+npm start -- --web  #启动程序（web 界面）
 ```
 
 配置文件保存在 `data/config.json`。
@@ -79,9 +65,18 @@ npm start -- --game "mc dungeons" --direction backup
 
 > 未通过参数指定时，会自动进入交互式选择。
 
+# 额外示例
 
+## node 环境安装
+程序使用nodejs 可以使用 nvm 安装
+https://github.com/coreybutler/nvm-windows
 
-## 额外提示 ：win掌机安装openssh步骤
+```
+nvm install 20.11.1
+```
+WINDOWS 装完后要重启才能用
+
+## win掌机安装openssh步骤
 我发现windows家庭版（掌机默认系统）是不带openssh的，需要手工安装。
 
 https://github.com/PowerShell/Win32-OpenSSH/releases

@@ -5,14 +5,13 @@ import os from 'os';
 import inquirer from 'inquirer';
 import dayjs from 'dayjs';
 import which from 'which';
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import SFTPClient from 'ssh2-sftp-client';
 import http from 'http';
 import net from 'net';
 import readline from 'readline';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
+import { fileURLToPath } from 'url';
+import systray2Import from 'systray2';
 
 // 全局错误处理，防止进程崩溃
 process.on('uncaughtException', (err) => {
@@ -25,13 +24,100 @@ process.on('unhandledRejection', (reason, promise) => {
 	// 不退出进程，让服务器继续运行
 });
 
-const ROOT = process.cwd();
-const DATA_DIR = path.join(ROOT, 'data');
-const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
-const BACKUP_DIR = path.join(ROOT, 'backups');
-const COVERS_DIR = path.join(DATA_DIR, 'covers');
-const FAVICON_PATH = path.join(ROOT, 'src', 'favicon.png');
-const TRAY_ICON_PATH = path.join(ROOT, 'assets', 'tray.ico');
+/** pkg / 打包后的单文件 EXE */
+const isPkg = typeof process.pkg !== 'undefined';
+const isPackaged = isPkg || process.env.GSM_PACKAGED === '1';
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+/** EXE / 项目安装目录（gsm-paths.json 固定写在这里） */
+const INSTALL_ROOT = isPkg ? path.dirname(process.execPath) : process.cwd();
+const PATHS_FILE = path.join(INSTALL_ROOT, 'gsm-paths.json');
+/** 只读资源：html / favicon（打包后在 snapshot / 与 bundle 同目录） */
+const ASSET_ROOT = isPackaged ? MODULE_DIR : path.join(INSTALL_ROOT, 'src');
+const FAVICON_PATH = path.join(ASSET_ROOT, 'favicon.png');
+const HTML_PATH = path.join(ASSET_ROOT, 'index.html');
+
+/** 工作目录：其下为 data/、backups/（可改） */
+let WORK_ROOT = INSTALL_ROOT;
+let DATA_DIR = path.join(WORK_ROOT, 'data');
+let CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+let BACKUP_DIR = path.join(WORK_ROOT, 'backups');
+let COVERS_DIR = path.join(DATA_DIR, 'covers');
+let TRAY_ICON_PATH = path.join(WORK_ROOT, 'assets', 'tray.ico');
+
+function applyWorkRoot(root) {
+	WORK_ROOT = path.resolve(root);
+	DATA_DIR = path.join(WORK_ROOT, 'data');
+	CONFIG_PATH = path.join(DATA_DIR, 'config.json');
+	BACKUP_DIR = path.join(WORK_ROOT, 'backups');
+	COVERS_DIR = path.join(DATA_DIR, 'covers');
+	TRAY_ICON_PATH = path.join(WORK_ROOT, 'assets', 'tray.ico');
+}
+
+function readSavedWorkRoot() {
+	try {
+		if (!fs.existsSync(PATHS_FILE)) return null;
+		const j = JSON.parse(fs.readFileSync(PATHS_FILE, 'utf8'));
+		if (j && typeof j.root === 'string' && j.root.trim()) {
+			return path.resolve(j.root.trim());
+		}
+	} catch (e) {
+		console.warn('读取 gsm-paths.json 失败:', e.message || e);
+	}
+	return null;
+}
+
+function saveWorkRoot(root) {
+	const resolved = path.resolve(root);
+	fse.writeJsonSync(PATHS_FILE, { root: resolved }, { spaces: 2 });
+	return resolved;
+}
+
+function getPathsInfo() {
+	return {
+		installRoot: INSTALL_ROOT,
+		root: WORK_ROOT,
+		dataDir: DATA_DIR,
+		backupDir: BACKUP_DIR,
+		configPath: CONFIG_PATH,
+		pathsFile: PATHS_FILE
+	};
+}
+
+/** Windows folder picker (works without a console window) */
+function pickFolderDialog(description = 'Select data folder', initialDir = WORK_ROOT) {
+	if (os.platform() !== 'win32') {
+		return null;
+	}
+	const desc = String(description).replace(/'/g, "''");
+	const init = String(initialDir || '').replace(/'/g, "''");
+	const ps = [
+		'Add-Type -AssemblyName System.Windows.Forms',
+		'$d = New-Object System.Windows.Forms.FolderBrowserDialog',
+		`$d.Description = '${desc}'`,
+		'$d.ShowNewFolderButton = $true',
+		init ? `try { $d.SelectedPath = '${init}' } catch {}` : '',
+		'$r = $d.ShowDialog()',
+		"if ($r -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }"
+	].filter(Boolean).join('; ');
+	const result = spawnSync(
+		'powershell.exe',
+		['-NoProfile', '-STA', '-ExecutionPolicy', 'Bypass', '-Command', ps],
+		{ encoding: 'utf8', windowsHide: true }
+	);
+	const out = (result.stdout || '').trim();
+	return out || null;
+}
+
+function setWorkRoot(root, { persist = true } = {}) {
+	const resolved = path.resolve(root);
+	applyWorkRoot(resolved);
+	if (persist) saveWorkRoot(resolved);
+	ensureDirs();
+	return getPathsInfo();
+}
+
+// Load saved work root early (CLI --root applied later in run())
+applyWorkRoot(readSavedWorkRoot() || INSTALL_ROOT);
 
 /** @type {{ port: number, url: string, server: import('http').Server } | null} */
 let webServerInfo = null;
@@ -1266,8 +1352,7 @@ async function startWebServer({ openBrowser = true } = {}) {
 		(async () => {
 			try {
 				if (req.url === '/' && req.method === 'GET') {
-			const htmlPath = path.join(ROOT, 'src', 'index.html');
-			fs.readFile(htmlPath, (err, data) => {
+			fs.readFile(HTML_PATH, (err, data) => {
 				if (err) {
 					res.writeHead(500, { 'Content-Type': 'text/plain' });
 					res.end('Error loading index.html');
@@ -1291,6 +1376,49 @@ async function startWebServer({ openBrowser = true } = {}) {
 			} catch (error) {
 				res.writeHead(500, { 'Content-Type': 'text/plain' });
 				res.end(error.message);
+			}
+		} else if (req.url === '/api/paths' && req.method === 'GET') {
+			try {
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify(getPathsInfo()));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url === '/api/paths' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { root } = JSON.parse(body || '{}');
+					if (!root || typeof root !== 'string') {
+						throw new Error('root is required');
+					}
+					const info = setWorkRoot(root.trim());
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: 'Data folder updated', ...info }));
+				} catch (error) {
+					res.writeHead(400, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+		} else if (req.url === '/api/paths/pick' && req.method === 'POST') {
+			try {
+				const picked = pickFolderDialog(
+					'Select GSM data folder (data/ and backups/ will be created here)',
+					WORK_ROOT
+				);
+				if (!picked) {
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ cancelled: true, ...getPathsInfo() }));
+					return;
+				}
+				const info = setWorkRoot(picked);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: 'Data folder updated', cancelled: false, ...info }));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
 			}
 		} else if (req.url === '/api/games' && req.method === 'GET') {
 			try {
@@ -2326,13 +2454,12 @@ async function startTrayMode({ openBrowser = false } = {}) {
 
 	let SysTray;
 	try {
-		const mod = require('systray2');
-		SysTray = mod?.default || mod?.SysTray || mod;
+		SysTray = systray2Import?.default || systray2Import?.SysTray || systray2Import;
 		if (typeof SysTray !== 'function') {
 			throw new Error(`无法识别 SysTray 构造函数（typeof=${typeof SysTray}）`);
 		}
 	} catch (err) {
-		console.error('无法加载托盘模块 systray2，请执行 npm install。', err.message || err);
+		console.error('无法加载托盘模块 systray2。', err.message || err);
 		console.log('Web 服务仍在运行，按 Ctrl+C 退出。');
 		await new Promise(() => {});
 		return;
@@ -2347,17 +2474,19 @@ async function startTrayMode({ openBrowser = false } = {}) {
 	const itemOpenWeb = { title: '打开 Web 界面', tooltip: info.url, checked: false, enabled: true };
 	const itemOpenBackup = { title: '打开备份文件夹', tooltip: BACKUP_DIR, checked: false, enabled: true };
 	const itemOpenConfig = { title: '打开配置文件', tooltip: CONFIG_PATH, checked: false, enabled: true };
+	const itemChooseData = { title: 'Choose data folder...', tooltip: WORK_ROOT, checked: false, enabled: true };
 	const itemExit = { title: '退出', tooltip: '退出 Game Save Manager', checked: false, enabled: true };
 
 	const systray = new SysTray({
 		menu: {
 			icon: iconBase64,
 			title: 'GSM',
-			tooltip: `Game Save Manager\n${info.url}`,
+			tooltip: `Game Save Manager\n${info.url}\n${WORK_ROOT}`,
 			items: [
 				itemOpenWeb,
 				itemOpenBackup,
 				itemOpenConfig,
+				itemChooseData,
 				SysTray.separator,
 				itemExit
 			]
@@ -2380,6 +2509,20 @@ async function startTrayMode({ openBrowser = false } = {}) {
 			openConfigFile().catch((e) => console.error(e));
 			return;
 		}
+		if (title === 'Choose data folder...') {
+			const picked = pickFolderDialog('Select GSM data folder (data/ and backups/ will be created here)', WORK_ROOT);
+			if (picked) {
+				setWorkRoot(picked);
+				itemChooseData.tooltip = WORK_ROOT;
+				itemOpenBackup.tooltip = BACKUP_DIR;
+				itemOpenConfig.tooltip = CONFIG_PATH;
+				try { systray.sendAction({ type: 'update-item', item: itemChooseData }); } catch { }
+				try { systray.sendAction({ type: 'update-item', item: itemOpenBackup }); } catch { }
+				try { systray.sendAction({ type: 'update-item', item: itemOpenConfig }); } catch { }
+				console.log(`数据目录已切换为：${WORK_ROOT}`);
+			}
+			return;
+		}
 		if (title === '退出') {
 			try { systray.kill(false); } catch { }
 			process.exit(0);
@@ -2390,11 +2533,22 @@ async function startTrayMode({ openBrowser = false } = {}) {
 }
 
 async function run() {
-	ensureDirs();
 	const args = parseArgs(process.argv.slice(2));
 
+	if (args.root) {
+		setWorkRoot(String(args.root));
+	} else {
+		ensureDirs();
+	}
+
+	// 打包后的 EXE：默认直接进入托盘模式
+	if (isPackaged && args.tray === undefined && args.web === undefined && args.game === undefined) {
+		args.tray = true;
+		args.open = true;
+	}
+
 	if (args.tray) {
-		return startTrayMode({ openBrowser: Boolean(args.open || args.browser) });
+		return startTrayMode({ openBrowser: Boolean(args.open || args.browser || isPackaged) });
 	}
 
 	if (args.web) {

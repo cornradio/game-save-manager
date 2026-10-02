@@ -1757,6 +1757,7 @@
             <div class="sidebar-header">
                 <h1>🕹️ GSM</h1>
                 <div style="display:flex; gap:4px; position:absolute; right:10px; top:12px;">
+                    <button class="settings-gear" onclick="showDataFolderModal()" title="Data folder">📁</button>
                     <button class="settings-gear" onclick="openBackupsFolder()" title="备份文件夹">📂</button>
                     <button class="settings-gear" onclick="showSshModal()" title="SSH 设置">⛓</button>
                     <button class="settings-gear" onclick="openConfig()" title="打开配置文件（高级）">📜</button>
@@ -1968,6 +1969,36 @@
         </div>
     </div>
 
+    <!-- Data folder modal -->
+    <div id="data-folder-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Data folder</h2>
+            </div>
+            <div class="modal-body">
+                <p class="form-hint" style="margin-top:0; margin-bottom:1em;">
+                    Config and covers go in <code>data/</code>, backups in <code>backups/</code>, under this folder.
+                </p>
+                <div class="form-group">
+                    <label>Work folder</label>
+                    <input type="text" id="data-folder-root" readonly>
+                </div>
+                <div class="form-group">
+                    <label>data/</label>
+                    <input type="text" id="data-folder-data" readonly>
+                </div>
+                <div class="form-group">
+                    <label>backups/</label>
+                    <input type="text" id="data-folder-backups" readonly>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="pickDataFolder()">Browse...</button>
+                <button onclick="closeDataFolderModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // 全局状态
         let selectedGame = null;
@@ -2016,6 +2047,43 @@
                 const r = await fetch('/api/open-backups-folder', { method: 'POST' });
                 if (!r.ok) throw new Error('Server error');
                 showToast('已打开备份文件夹', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function showDataFolderModal() {
+            try {
+                const r = await fetch('/api/paths');
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Failed to load paths');
+                document.getElementById('data-folder-root').value = data.root || '';
+                document.getElementById('data-folder-data').value = data.dataDir || '';
+                document.getElementById('data-folder-backups').value = data.backupDir || '';
+                document.getElementById('data-folder-modal').style.display = 'flex';
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function closeDataFolderModal() {
+            document.getElementById('data-folder-modal').style.display = 'none';
+        }
+
+        async function pickDataFolder() {
+            try {
+                const r = await fetch('/api/paths/pick', { method: 'POST' });
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || 'Pick failed');
+                if (data.cancelled) {
+                    showToast('Cancelled', 'error', true);
+                    return;
+                }
+                document.getElementById('data-folder-root').value = data.root || '';
+                document.getElementById('data-folder-data').value = data.dataDir || '';
+                document.getElementById('data-folder-backups').value = data.backupDir || '';
+                showToast('Data folder updated', 'success');
+                if (typeof fetchGames === 'function') await fetchGames();
             } catch (e) {
                 showToast(e.message, 'error');
             }

@@ -42,6 +42,14 @@ npm start -- --web  #启动程序（web 界面）
    - 右下角托盘图标可：打开 Web / 打开备份文件夹 / 打开配置 / 退出
    - 交互菜单里也可按 `T` 进入托盘模式
 
+### 打包成单文件 EXE（Windows）
+
+```powershell
+.\pack.ps1
+```
+
+产物：`release/GameSaveManager.exe`。双击即启动托盘模式并打开 Web 界面（无黑窗口）；默认在 EXE 旁创建 `data/`、`backups/`。可在托盘菜单 **Choose data folder...** 或网页左上角 📁 更换数据目录（路径保存在 EXE 旁的 `gsm-paths.json`）。
+
 ### CLI 快捷键
 
 主菜单支持**直接按键**（不必再用方向键）：

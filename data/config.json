@@ -1,6 +1,13 @@
 {
   "games": [
     {
+      "name": "gta-sa",
+      "localPath": "C:\\Users\\kasus\\Documents\\Rockstar Games\\GTA San Andreas Definitive Edition\\Profiles\\4FE6B48B",
+      "syncMode": "local",
+      "nobackup": false,
+      "coverImage": "covers/gta-sa_1790913765247.jpg"
+    },
+    {
       "name": "📂A-sync",
       "localPath": "C:\\Users\\kasus\\Downloads\\da",
       "remoteFullPath": "/C:/Users/kasus/Downloads/da2",

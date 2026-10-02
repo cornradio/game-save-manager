@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "web": "node src/index.js --web",
-    "tray": "node src/index.js --tray --open"
+    "tray": "node src/index.js --tray --open",
+    "build:exe": "node scripts/pack-exe.mjs"
   },
   "dependencies": {
     "dayjs": "^1.11.13",
@@ -16,5 +17,9 @@
     "ssh2-sftp-client": "^9.1.0",
     "systray2": "^2.1.4",
     "which": "^4.0.0"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.3.2",
+    "esbuild": "^0.25.0"
   }
 }

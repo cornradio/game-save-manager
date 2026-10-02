@@ -1,3 +1,8 @@
 /backups
 /node_modules
 /data/covers
+/dist
+/release
+/gsm-paths.json
+/gsm.log
+/assets/tray.ico

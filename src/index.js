@@ -9,6 +9,10 @@ import { spawn } from 'child_process';
 import SFTPClient from 'ssh2-sftp-client';
 import http from 'http';
 import net from 'net';
+import readline from 'readline';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
 
 // 全局错误处理，防止进程崩溃
 process.on('uncaughtException', (err) => {
@@ -25,6 +29,12 @@ const ROOT = process.cwd();
 const DATA_DIR = path.join(ROOT, 'data');
 const CONFIG_PATH = path.join(DATA_DIR, 'config.json');
 const BACKUP_DIR = path.join(ROOT, 'backups');
+const COVERS_DIR = path.join(DATA_DIR, 'covers');
+const FAVICON_PATH = path.join(ROOT, 'src', 'favicon.png');
+const TRAY_ICON_PATH = path.join(ROOT, 'assets', 'tray.ico');
+
+/** @type {{ port: number, url: string, server: import('http').Server } | null} */
+let webServerInfo = null;
 
 function parseArgs(argv = []) {
 	const result = {};
@@ -54,6 +64,98 @@ function parseArgs(argv = []) {
 function ensureDirs() {
 	if (!fs.existsSync(DATA_DIR)) fse.mkdirpSync(DATA_DIR);
 	if (!fs.existsSync(BACKUP_DIR)) fse.mkdirpSync(BACKUP_DIR);
+	if (!fs.existsSync(COVERS_DIR)) fse.mkdirpSync(COVERS_DIR);
+	migrateLegacyBackups();
+}
+
+/**
+ * 支持快捷键的菜单：直接按数字/字母即可，也可用 ↑↓ + 回车。
+ * @param {string} message
+ * @param {Array<{ name: string, value: any, hotkey?: string, separator?: boolean }>} choices
+ */
+async function promptHotkeyMenu(message, choices) {
+	const actionable = choices.filter(c => !c.separator);
+	if (actionable.length === 0) {
+		throw new Error('菜单没有可选项');
+	}
+
+	let selected = 0;
+	const render = () => {
+		process.stdout.write('\x1Bc');
+		console.log(`\n${message}`);
+		console.log('提示：直接按括号内的键即可（如 W），也可用 ↑↓ + 回车\n');
+		for (const c of choices) {
+			if (c.separator) {
+				console.log(`  ${c.name}`);
+				continue;
+			}
+			const idx = actionable.indexOf(c);
+			const marker = idx === selected ? '>' : ' ';
+			console.log(` ${marker} ${c.name}`);
+		}
+	};
+
+	return new Promise((resolve) => {
+		readline.emitKeypressEvents(process.stdin);
+		const wasRaw = process.stdin.isRaw;
+		if (process.stdin.isTTY) {
+			process.stdin.setRawMode(true);
+		}
+		process.stdin.resume();
+		render();
+
+		const cleanup = () => {
+			process.stdin.removeListener('keypress', onKeypress);
+			if (process.stdin.isTTY) {
+				process.stdin.setRawMode(Boolean(wasRaw));
+			}
+		};
+
+		const finish = (value) => {
+			cleanup();
+			process.stdout.write('\n');
+			resolve(value);
+		};
+
+		const onKeypress = (str, key) => {
+			if (!key) return;
+			if (key.ctrl && key.name === 'c') {
+				cleanup();
+				process.exit(0);
+			}
+			if (key.name === 'up') {
+				selected = (selected - 1 + actionable.length) % actionable.length;
+				render();
+				return;
+			}
+			if (key.name === 'down') {
+				selected = (selected + 1) % actionable.length;
+				render();
+				return;
+			}
+			if (key.name === 'return' || key.name === 'enter') {
+				finish(actionable[selected].value);
+				return;
+			}
+			if (key.name === 'escape') {
+				const back = actionable.find(c => c.hotkey === 'r' || c.value === 'back' || c.value === 'exit');
+				if (back) {
+					finish(back.value);
+				}
+				return;
+			}
+
+			const pressed = String(str || key.name || '').toLowerCase();
+			if (!pressed) return;
+
+			const hit = actionable.find(c => c.hotkey && String(c.hotkey).toLowerCase() === pressed);
+			if (hit) {
+				finish(hit.value);
+			}
+		};
+
+		process.stdin.on('keypress', onKeypress);
+	});
 }
 
 function loadConfig() {
@@ -89,6 +191,125 @@ function getDefaultSshMachine(cfg) {
 
 function timestamp() {
 	return dayjs().format('YYYYMMDD_HHmmss');
+}
+
+function isBackupTimestamp(name) {
+	return /^\d{8}_\d{6}$/.test(String(name || ''));
+}
+
+function gameBackupRoot(gameName) {
+	return path.join(BACKUP_DIR, String(gameName));
+}
+
+function gameImagesDir(gameName) {
+	return path.join(gameBackupRoot(gameName), 'myImage');
+}
+
+function gameImagesMetaPath(gameName) {
+	return path.join(gameImagesDir(gameName), 'meta.json');
+}
+
+function backupInstancePath(gameName, backupId) {
+	const id = String(backupId || '');
+	// 新结构：backups/<game>/<YYYYMMDD_HHmmss>
+	if (isBackupTimestamp(id)) {
+		return path.join(gameBackupRoot(gameName), id);
+	}
+	// 兼容旧 API 名：GameName_YYYYMMDD_HHmmss
+	const prefix = `${gameName}_`;
+	if (id.startsWith(prefix)) {
+		const ts = id.slice(prefix.length);
+		if (isBackupTimestamp(ts)) {
+			return path.join(gameBackupRoot(gameName), ts);
+		}
+	}
+	return null;
+}
+
+function parseBackupTime(ts, fallbackDate = new Date()) {
+	if (!isBackupTimestamp(ts)) return fallbackDate;
+	const year = ts.substring(0, 4);
+	const month = ts.substring(4, 6);
+	const day = ts.substring(6, 8);
+	const hour = ts.substring(9, 11);
+	const minute = ts.substring(11, 13);
+	const second = ts.substring(13, 15);
+	return new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
+}
+
+function listBackupIds(gameName) {
+	const root = gameBackupRoot(gameName);
+	if (!fs.existsSync(root)) return [];
+	return fs.readdirSync(root).filter((name) => {
+		if (name === 'myImage') return false;
+		const full = path.join(root, name);
+		try {
+			return isBackupTimestamp(name) && fs.statSync(full).isDirectory();
+		} catch {
+			return false;
+		}
+	});
+}
+
+/** 将旧结构 backups/Game_时间戳 迁移到 backups/Game/时间戳 */
+function migrateLegacyBackups() {
+	if (!fs.existsSync(BACKUP_DIR)) return;
+	const entries = fs.readdirSync(BACKUP_DIR);
+	for (const name of entries) {
+		const full = path.join(BACKUP_DIR, name);
+		let stat;
+		try { stat = fs.statSync(full); } catch { continue; }
+		if (!stat.isDirectory()) continue;
+		if (name === 'myImage') continue;
+
+		const match = name.match(/^(.*)_(\d{8}_\d{6})$/);
+		if (!match) continue;
+
+		const gameName = match[1];
+		const ts = match[2];
+		const destRoot = gameBackupRoot(gameName);
+		const dest = path.join(destRoot, ts);
+		try {
+			fse.mkdirpSync(destRoot);
+			if (fs.existsSync(dest)) {
+				console.warn(`[migrate] 目标已存在，跳过: ${dest}`);
+				continue;
+			}
+			fs.renameSync(full, dest);
+			console.log(`[migrate] ${name} -> ${gameName}/${ts}`);
+		} catch (err) {
+			console.error(`[migrate] 失败 ${name}:`, err.message || err);
+		}
+	}
+}
+
+function ensureGameBackupDirs(gameName) {
+	fse.mkdirpSync(gameBackupRoot(gameName));
+	fse.mkdirpSync(gameImagesDir(gameName));
+}
+
+function readImagesMeta(gameName) {
+	ensureGameBackupDirs(gameName);
+	const metaPath = gameImagesMetaPath(gameName);
+	if (!fs.existsSync(metaPath)) {
+		return { images: [] };
+	}
+	try {
+		const meta = fse.readJsonSync(metaPath);
+		if (!Array.isArray(meta.images)) meta.images = [];
+		return meta;
+	} catch {
+		return { images: [] };
+	}
+}
+
+function writeImagesMeta(gameName, meta) {
+	ensureGameBackupDirs(gameName);
+	fse.writeJsonSync(gameImagesMetaPath(gameName), meta, { spaces: 2 });
+}
+
+function imagePublicUrl(gameName, imageId) {
+	return `/api/games/${encodeURIComponent(gameName)}/images/${encodeURIComponent(imageId)}/file`;
 }
 
 function getDirSize(dirPath) {
@@ -135,16 +356,18 @@ async function openBackupDir() {
 }
 
 async function openWebPage() {
-	const port = 9123;
-	const url = `http://localhost:${port}`;
 	console.log(`正在检查 Web 服务器状态...`);
-	
-	const portAvailable = await isPortAvailable(port);
-	if (portAvailable) {
-		console.log('Web 服务器未启动，正在启动...');
-		await startWebServer();
+	if (!webServerInfo) {
+		const portAvailable = await isPortAvailable(9123);
+		if (portAvailable) {
+			console.log('Web 服务器未启动，正在启动...');
+			await startWebServer({ openBrowser: false });
+		} else {
+			webServerInfo = { port: 9123, url: 'http://localhost:9123', server: null };
+		}
 	}
-	
+
+	const url = webServerInfo?.url || 'http://localhost:9123';
 	console.log(`正在打开 Web 页面：${url}`);
 	try {
 		const platform = os.platform();
@@ -189,20 +412,23 @@ async function pickOrCreateGame(cfg, preselectName) {
 	}
 
 	const choices = cfg.games.map((g, idx) => {
-		const key = idx + 1;
-		return { name: `[${key}] ${g.name}`, value: idx };
+		const key = String(idx + 1);
+		return {
+			name: `[${key}] ${g.name}`,
+			value: idx,
+			hotkey: key.length === 1 ? key : undefined
+		};
 	});
-	
-	choices.push(new inquirer.Separator('--- 其他选项 ---'));
-	choices.push({ name: '[N] 新建游戏', value: 'create' });
-	choices.push({ name: '[F] 打开备份文件夹', value: 'openBackupDir' });
-	choices.push({ name: '[E] 编辑配置文件', value: 'editConfig' });
-	choices.push({ name: '[W] 打开Web页面', value: 'openWeb' });
-	choices.push({ name: '[Q] 退出程序', value: 'exit' });
 
-	const { selection } = await inquirer.prompt([
-		{ type: 'list', name: 'selection', message: '选择一个游戏或操作（按对应键+回车）：', choices, pageSize: 15 }
-	]);
+	choices.push({ separator: true, name: '--- 其他选项 ---' });
+	choices.push({ name: '[N] 新建游戏', value: 'create', hotkey: 'n' });
+	choices.push({ name: '[F] 打开备份文件夹', value: 'openBackupDir', hotkey: 'f' });
+	choices.push({ name: '[E] 编辑配置文件', value: 'editConfig', hotkey: 'e' });
+	choices.push({ name: '[W] 打开 Web 页面', value: 'openWeb', hotkey: 'w' });
+	choices.push({ name: '[T] 进入托盘模式（后台）', value: 'tray', hotkey: 't' });
+	choices.push({ name: '[Q] 退出程序', value: 'exit', hotkey: 'q' });
+
+	const selection = await promptHotkeyMenu('选择一个游戏或操作：', choices);
 
 	if (selection === 'editConfig') {
 		await openConfigFile();
@@ -215,6 +441,10 @@ async function pickOrCreateGame(cfg, preselectName) {
 	if (selection === 'openWeb') {
 		await openWebPage();
 		return null;
+	}
+	if (selection === 'tray') {
+		await startTrayMode({ openBrowser: true });
+		return 'tray-running';
 	}
 	if (selection === 'exit') {
 		console.log('程序退出。');
@@ -541,9 +771,10 @@ async function backupBoth(game, remote, direction) {
 		return;
 	}
 
-	const root = path.join(BACKUP_DIR, `${game.name}_${timestamp()}`);
+	const root = path.join(gameBackupRoot(game.name), timestamp());
 	const localDest = path.join(root, 'local');
 	const remoteDest = path.join(root, 'remote');
+	ensureGameBackupDirs(game.name);
 	await backupLocal(game, localDest);
 	await backupRemote(game, remote, remoteDest);
 
@@ -563,11 +794,132 @@ async function backupBoth(game, remote, direction) {
 }
 
 async function backupLocalOnly(game) {
-	const root = path.join(BACKUP_DIR, `${game.name}_${timestamp()}`);
+	ensureGameBackupDirs(game.name);
+	const root = path.join(gameBackupRoot(game.name), timestamp());
 	const localDest = path.join(root, 'local');
 	await backupLocal(game, localDest);
 	await writeBackupLog(root, game, 'Local Only Backup', 'local-backup.log', null);
 	console.log(`本地存档备份已完成（仅备份模式）：${localDest}`);
+}
+
+function isSwitchMode(game) {
+	return game && (game.syncMode === 'switch' || game.syncMode === 'switch-pc');
+}
+
+function isLocalMode(game) {
+	return game && (game.syncMode === 'local' || game.syncMode === 'backup' || game.syncMode === 'local-only');
+}
+
+function getSwitchPath(game) {
+	const p = game?.switchPath || game?.switchFullPath;
+	if (!p || typeof p !== 'string' || !p.trim()) {
+		throw new Error(`游戏 ${game?.name || ''} 未配置 Switch 存档路径（switchPath）`);
+	}
+	return path.resolve(p.trim());
+}
+
+/** PC↔Switch 同步时按规则重命名：PC 有 .sav，Switch 无 .sav */
+function renameForSwitchSync(fileName, direction) {
+	const lower = fileName.toLowerCase();
+	if (direction === 'pc-to-switch') {
+		if (lower.endsWith('.sav')) return fileName.slice(0, -4);
+		return fileName;
+	}
+	// switch-to-pc
+	if (!lower.endsWith('.sav')) return `${fileName}.sav`;
+	return fileName;
+}
+
+async function copyDirWithSavRename(srcDir, destDir, direction) {
+	await fse.mkdirp(destDir);
+	const items = await fse.readdir(srcDir);
+	for (const name of items) {
+		const srcPath = path.join(srcDir, name);
+		const stat = await fse.stat(srcPath);
+		if (stat.isDirectory()) {
+			await copyDirWithSavRename(srcPath, path.join(destDir, name), direction);
+			continue;
+		}
+		const destName = renameForSwitchSync(name, direction);
+		await fse.copy(srcPath, path.join(destDir, destName), { overwrite: true });
+	}
+}
+
+async function backupSwitchSide(game, dest) {
+	const switchPath = getSwitchPath(game);
+	await fse.mkdirp(dest);
+	if (!fs.existsSync(switchPath)) {
+		console.log(`Switch 目录不存在，已创建空备份记录：${switchPath}`);
+		return;
+	}
+	await fse.copy(switchPath, dest, { overwrite: true, errorOnExist: false });
+	console.log(`Switch 备份完成：${dest}`);
+}
+
+async function backupPcAndSwitch(game, direction) {
+	if (game.nobackup) {
+		console.log(`\n[配置] 游戏 "${game.name}" 已设置 nobackup=true，跳过备份步骤，直接进行同步。`);
+		return;
+	}
+
+	ensureGameBackupDirs(game.name);
+	const root = path.join(gameBackupRoot(game.name), timestamp());
+	const localDest = path.join(root, 'local');
+	const switchDest = path.join(root, 'remote');
+	await backupLocal(game, localDest);
+	await backupSwitchSide(game, switchDest);
+
+	let logName = 'backup.log';
+	let type = 'Full Backup (PC + Switch)';
+	let logDirection = null;
+	if (direction === 'push' || direction === 'pc-to-switch') {
+		logName = 'local-to-remote.log';
+		type = 'Pre-sync Backup (PC -> Switch)';
+		logDirection = 'pc-to-switch';
+	} else if (direction === 'pull' || direction === 'switch-to-pc') {
+		logName = 'remote-to-local.log';
+		type = 'Pre-sync Backup (Switch -> PC)';
+		logDirection = 'switch-to-pc';
+	}
+	await writeBackupLog(root, game, type, logName, logDirection);
+}
+
+async function syncPcToSwitch(game) {
+	const switchPath = getSwitchPath(game);
+	if (!fs.existsSync(game.localPath)) {
+		throw new Error(`PC 存档路径不存在：${game.localPath}`);
+	}
+	await fse.mkdirp(switchPath);
+
+	const tempDir = path.join(os.tmpdir(), `gsm_pc2switch_${Date.now()}`);
+	try {
+		await fse.emptyDir(tempDir);
+		await copyDirWithSavRename(game.localPath, tempDir, 'pc-to-switch');
+		await fse.emptyDir(switchPath);
+		await fse.copy(tempDir, switchPath, { overwrite: true });
+	} finally {
+		try { await fse.remove(tempDir); } catch { }
+	}
+	console.log(`同步完成（PC -> Switch）：${game.localPath} -> ${switchPath}`);
+}
+
+async function syncSwitchToPc(game) {
+	const switchPath = getSwitchPath(game);
+	if (!fs.existsSync(switchPath)) {
+		throw new Error(`Switch 存档路径不存在：${switchPath}`);
+	}
+	await fse.mkdirp(game.localPath);
+
+	const tempDir = path.join(os.tmpdir(), `gsm_switch2pc_${Date.now()}`);
+	try {
+		await fse.emptyDir(tempDir);
+		await copyDirWithSavRename(switchPath, tempDir, 'switch-to-pc');
+		await fse.emptyDir(game.localPath);
+		await fse.copy(tempDir, game.localPath, { overwrite: true });
+	} finally {
+		try { await fse.remove(tempDir); } catch { }
+	}
+	console.log(`同步完成（Switch -> PC）：${switchPath} -> ${game.localPath}`);
 }
 
 async function reconfigureRemote(cfg) {
@@ -625,11 +977,15 @@ function normalizeDirectionInput(input) {
 		case 'push':
 		case 'upload':
 		case 'l2r':
+		case 'pc2switch':
+		case 'pc-to-switch':
 			return 'push';
 		case 'remote2local':
 		case 'pull':
 		case 'download':
 		case 'r2l':
+		case 'switch2pc':
+		case 'switch-to-pc':
 			return 'pull';
 		case 'backup':
 		case 'backuplocal':
@@ -642,43 +998,225 @@ function normalizeDirectionInput(input) {
 	}
 }
 
-function directionLabel(direction) {
+function directionLabel(direction, game = null) {
+	const switchMode = isSwitchMode(game);
 	switch (direction) {
-		case 'push': return '本地 -> 远程';
-		case 'pull': return '远程 -> 本地';
+		case 'push': return switchMode ? 'PC -> Switch' : '本地 -> 远程';
+		case 'pull': return switchMode ? 'Switch -> PC' : '远程 -> 本地';
 		case 'backupLocal': return '仅备份本地存档';
 		default: return direction;
 	}
 }
 
-async function resolveDirection(argDirection) {
+function buildGameFromPayload(gameData, existing = null) {
+	if (!gameData.name || !gameData.localPath) {
+		throw new Error('游戏名称和本地/PC 存档路径为必填项');
+	}
+
+	const syncMode = (gameData.syncMode || existing?.syncMode || 'local').trim();
+	if (!['remote', 'switch', 'local'].includes(syncMode)) {
+		throw new Error('syncMode 只能是 local、remote 或 switch');
+	}
+
+	const game = {
+		...(existing || {}),
+		name: gameData.name.trim(),
+		localPath: path.resolve(gameData.localPath.trim()),
+		syncMode,
+		...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : (existing?.nobackup !== undefined ? { nobackup: existing.nobackup } : {}))
+	};
+
+	if (syncMode === 'switch') {
+		const switchPath = (gameData.switchPath ?? gameData.switchFullPath ?? existing?.switchPath ?? existing?.switchFullPath ?? '').toString().trim();
+		if (!switchPath) {
+			throw new Error('Switch 模式需要填写 Switch 存档路径');
+		}
+		game.switchPath = path.resolve(switchPath);
+		delete game.remoteFullPath;
+	} else if (syncMode === 'remote') {
+		const remoteFullPath = (gameData.remoteFullPath !== undefined
+			? gameData.remoteFullPath
+			: (existing?.remoteFullPath || '')
+		);
+		if (remoteFullPath && String(remoteFullPath).trim()) {
+			game.remoteFullPath = String(remoteFullPath).trim().replace(/\\/g, '/');
+		} else {
+			delete game.remoteFullPath;
+		}
+		delete game.switchPath;
+		delete game.switchFullPath;
+	} else {
+		// local-only：不需要远程/Switch 路径
+		delete game.remoteFullPath;
+		delete game.switchPath;
+		delete game.switchFullPath;
+		game.nobackup = false;
+	}
+
+	if (gameData.coverImage !== undefined) {
+		if (gameData.coverImage) {
+			game.coverImage = String(gameData.coverImage);
+		} else {
+			delete game.coverImage;
+		}
+	} else if (existing?.coverImage) {
+		game.coverImage = existing.coverImage;
+	}
+
+	return game;
+}
+
+function safeCoverBasename(name) {
+	return String(name || 'cover')
+		.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+		.replace(/\s+/g, '_')
+		.slice(0, 80) || 'cover';
+}
+
+function coverPublicUrl(relPath) {
+	if (!relPath) return null;
+	const base = path.basename(String(relPath).replace(/\\/g, '/'));
+	return `/api/covers/${encodeURIComponent(base)}`;
+}
+
+function resolveCoverFile(relOrName) {
+	const base = path.basename(String(relOrName || '').replace(/\\/g, '/'));
+	if (!base || base === '.' || base === '..') return null;
+	const full = path.join(COVERS_DIR, base);
+	if (!full.startsWith(COVERS_DIR)) return null;
+	return full;
+}
+
+async function saveCoverFromDataUrl(gameName, dataUrl, oldCoverRel = null) {
+	const match = String(dataUrl || '').match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,(.+)$/i);
+	if (!match) {
+		throw new Error('仅支持 PNG / JPG / WEBP / GIF 图片');
+	}
+	let ext = match[1].toLowerCase();
+	if (ext === 'jpeg') ext = 'jpg';
+	const buf = Buffer.from(match[2], 'base64');
+	if (buf.length > 8 * 1024 * 1024) {
+		throw new Error('封面图片过大（最大 8MB）');
+	}
+	const filename = `${safeCoverBasename(gameName)}_${Date.now()}.${ext}`;
+	const fullPath = path.join(COVERS_DIR, filename);
+	await fse.writeFile(fullPath, buf);
+
+	if (oldCoverRel) {
+		const oldPath = resolveCoverFile(oldCoverRel);
+		if (oldPath && fs.existsSync(oldPath) && oldPath !== fullPath) {
+			try { await fse.remove(oldPath); } catch { }
+		}
+	}
+
+	return `covers/${filename}`;
+}
+
+async function removeCoverFile(relOrName) {
+	const full = resolveCoverFile(relOrName);
+	if (full && fs.existsSync(full)) {
+		try { await fse.remove(full); } catch { }
+	}
+}
+
+function mimeFromCoverExt(filename) {
+	const ext = path.extname(filename).toLowerCase();
+	switch (ext) {
+		case '.png': return 'image/png';
+		case '.jpg':
+		case '.jpeg': return 'image/jpeg';
+		case '.webp': return 'image/webp';
+		case '.gif': return 'image/gif';
+		default: return 'application/octet-stream';
+	}
+}
+
+/** 将 PNG 打包为 Windows 可用的 ICO（内嵌 PNG） */
+function pngBufferToIco(pngBuf) {
+	if (!pngBuf || pngBuf.length < 24 || pngBuf[0] !== 0x89 || pngBuf[1] !== 0x50) {
+		throw new Error('无效的 PNG 数据');
+	}
+	const width = pngBuf.readUInt32BE(16);
+	const height = pngBuf.readUInt32BE(20);
+	const offset = 22; // 6 + 16
+	const ico = Buffer.alloc(offset + pngBuf.length);
+	ico.writeUInt16LE(0, 0);
+	ico.writeUInt16LE(1, 2);
+	ico.writeUInt16LE(1, 4);
+	ico[6] = width >= 256 ? 0 : width;
+	ico[7] = height >= 256 ? 0 : height;
+	ico[8] = 0;
+	ico[9] = 0;
+	ico.writeUInt16LE(1, 10);
+	ico.writeUInt16LE(32, 12);
+	ico.writeUInt32LE(pngBuf.length, 14);
+	ico.writeUInt32LE(offset, 18);
+	pngBuf.copy(ico, offset);
+	return ico;
+}
+
+function ensureTrayIconFromFavicon() {
+	if (!fs.existsSync(FAVICON_PATH)) {
+		return fs.existsSync(TRAY_ICON_PATH) ? TRAY_ICON_PATH : null;
+	}
+
+	try {
+		const favStat = fs.statSync(FAVICON_PATH);
+		const needRebuild = !fs.existsSync(TRAY_ICON_PATH)
+			|| fs.statSync(TRAY_ICON_PATH).mtimeMs < favStat.mtimeMs;
+		if (needRebuild) {
+			fse.mkdirpSync(path.dirname(TRAY_ICON_PATH));
+			const pngBuf = fs.readFileSync(FAVICON_PATH);
+			fs.writeFileSync(TRAY_ICON_PATH, pngBufferToIco(pngBuf));
+			console.log(`已从 favicon.png 生成托盘图标：${TRAY_ICON_PATH}`);
+		}
+		return TRAY_ICON_PATH;
+	} catch (err) {
+		console.warn('生成托盘图标失败，将尝试直接使用 PNG：', err.message || err);
+		return FAVICON_PATH;
+	}
+}
+
+function loadTrayIconBase64() {
+	const iconPath = ensureTrayIconFromFavicon();
+	if (!iconPath || !fs.existsSync(iconPath)) return '';
+	return fs.readFileSync(iconPath).toString('base64');
+}
+
+async function resolveDirection(argDirection, game = null) {
 	if (argDirection !== undefined) {
 		const mappedFromArg = normalizeDirectionInput(argDirection);
 		if (!mappedFromArg) {
 			throw new Error(`无法识别 --direction 参数 "${argDirection}"，可选值：local2remote、remote2local、backup`);
 		}
-		console.log(`已通过命令行参数选择操作：${directionLabel(mappedFromArg)}`);
+		if (isLocalMode(game) && mappedFromArg !== 'backupLocal') {
+			throw new Error(`游戏 "${game.name}" 为仅本地模式，只能使用 --direction backup`);
+		}
+		console.log(`已通过命令行参数选择操作：${directionLabel(mappedFromArg, game)}`);
 		return mappedFromArg;
 	}
-	
-	const { direction } = await inquirer.prompt([
-		{
-			type: 'list',
-			name: 'direction',
-			message: '选择操作（按对应键+回车）：',
-			choices: [
-				{ name: '[1] 本地 -> 远程（用本地覆盖远程）', value: 'push' },
-				{ name: '[2] 远程 -> 本地（用远程覆盖本地）', value: 'pull' },
-				{ name: '[3] 仅备份本地存档', value: 'backupLocal' },
-				{ name: '[R] 返回上级菜单', value: 'back' }
-			]
-		}
-	]);
-	
+
+	const switchMode = isSwitchMode(game);
+	const localMode = isLocalMode(game);
+	const choices = localMode ? [
+		{ name: '[1] 备份本地存档', value: 'backupLocal', hotkey: '1' },
+		{ name: '[R] 返回上级菜单', value: 'back', hotkey: 'r' }
+	] : switchMode ? [
+		{ name: '[1] PC -> Switch（去掉 .sav 后缀）', value: 'push', hotkey: '1' },
+		{ name: '[2] Switch -> PC（加上 .sav 后缀）', value: 'pull', hotkey: '2' },
+		{ name: '[3] 仅备份本地(PC)存档', value: 'backupLocal', hotkey: '3' },
+		{ name: '[R] 返回上级菜单', value: 'back', hotkey: 'r' }
+	] : [
+		{ name: '[1] 本地 -> 远程（用本地覆盖远程）', value: 'push', hotkey: '1' },
+		{ name: '[2] 远程 -> 本地（用远程覆盖本地）', value: 'pull', hotkey: '2' },
+		{ name: '[3] 仅备份本地存档', value: 'backupLocal', hotkey: '3' },
+		{ name: '[R] 返回上级菜单', value: 'back', hotkey: 'r' }
+	];
+
+	const direction = await promptHotkeyMenu('选择操作：', choices);
 	if (direction === 'back') {
 		return null;
 	}
-	
 	return direction;
 }
 
@@ -706,7 +1244,11 @@ async function findAvailablePort(startPort = 8080, maxAttempts = 20) {
 	throw new Error(`无法找到可用端口（尝试了 ${startPort} 到 ${startPort + maxAttempts - 1}）`);
 }
 
-async function startWebServer() {
+async function startWebServer({ openBrowser = true } = {}) {
+	if (webServerInfo?.server) {
+		return webServerInfo;
+	}
+
 	// 自动查找可用端口
 	let port;
 	try {
@@ -734,15 +1276,89 @@ async function startWebServer() {
 				res.writeHead(200, { 'Content-Type': 'text/html' });
 				res.end(data);
 			});
+		} else if ((req.url === '/favicon.png' || req.url === '/favicon.ico') && req.method === 'GET') {
+			try {
+				if (!fs.existsSync(FAVICON_PATH)) {
+					res.writeHead(404, { 'Content-Type': 'text/plain' });
+					res.end('Not Found');
+					return;
+				}
+				res.writeHead(200, {
+					'Content-Type': 'image/png',
+					'Cache-Control': 'public, max-age=86400'
+				});
+				fs.createReadStream(FAVICON_PATH).pipe(res);
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'text/plain' });
+				res.end(error.message);
+			}
 		} else if (req.url === '/api/games' && req.method === 'GET') {
 			try {
 				const cfg = loadConfig();
+				const list = (cfg.games || []).map(g => ({
+					...g,
+					coverUrl: coverPublicUrl(g.coverImage)
+				}));
 				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify(cfg.games || []));
+				res.end(JSON.stringify(list));
 			} catch (error) {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Failed to load config' }));
 			}
+		} else if (req.url.startsWith('/api/covers/') && req.method === 'GET') {
+			try {
+				const raw = decodeURIComponent(req.url.split('/').pop().split('?')[0]);
+				const full = resolveCoverFile(raw);
+				if (!full || !fs.existsSync(full)) {
+					res.writeHead(404, { 'Content-Type': 'text/plain' });
+					res.end('Not Found');
+					return;
+				}
+				res.writeHead(200, {
+					'Content-Type': mimeFromCoverExt(full),
+					'Cache-Control': 'public, max-age=86400'
+				});
+				fs.createReadStream(full).pipe(res);
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'text/plain' });
+				res.end(error.message);
+			}
+		} else if (req.url === '/api/games/reorder' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { order } = JSON.parse(body);
+					if (!Array.isArray(order) || order.length === 0) {
+						throw new Error('order 必须是非空数组');
+					}
+					const cfg = loadConfig();
+					const byName = new Map((cfg.games || []).map(g => [g.name, g]));
+					const next = [];
+					const seen = new Set();
+					for (const name of order) {
+						if (byName.has(name) && !seen.has(name)) {
+							next.push(byName.get(name));
+							seen.add(name);
+						}
+					}
+					// 未出现在 order 里的游戏追加到末尾，避免丢失
+					for (const g of cfg.games || []) {
+						if (!seen.has(g.name)) next.push(g);
+					}
+					cfg.games = next;
+					saveConfig(cfg);
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({
+						message: '排序已保存',
+						games: next.map(g => ({ ...g, coverUrl: coverPublicUrl(g.coverImage) }))
+					}));
+				} catch (error) {
+					console.error('[Web API] Reorder games error:', error);
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
 		} else if (req.url === '/api/games' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
@@ -751,31 +1367,31 @@ async function startWebServer() {
 					const gameData = JSON.parse(body);
 					const cfg = loadConfig();
 					
-					// 验证必填字段
-					if (!gameData.name || !gameData.localPath) {
-						throw new Error('游戏名称和本地路径为必填项');
-					}
-					
-					// 检查游戏名称是否已存在
-					if (cfg.games.find(g => g.name === gameData.name)) {
+					if (cfg.games.find(g => g.name === (gameData.name || '').trim())) {
 						throw new Error(`游戏 "${gameData.name}" 已存在`);
 					}
 					
-					const game = {
-						name: gameData.name.trim(),
-						localPath: path.resolve(gameData.localPath.trim()),
-						...(gameData.remoteFullPath ? { remoteFullPath: gameData.remoteFullPath.trim().replace(/\\/g, '/') } : {}),
-						...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : {})
-					};
-					
-					// 确保本地目录存在
+					const game = buildGameFromPayload(gameData);
 					fse.mkdirpSync(game.localPath);
+					if (isSwitchMode(game) && game.switchPath) {
+						fse.mkdirpSync(game.switchPath);
+					}
+					ensureGameBackupDirs(game.name);
+
+					if (gameData.coverDataUrl) {
+						game.coverImage = await saveCoverFromDataUrl(game.name, gameData.coverDataUrl, null);
+					} else if (gameData.clearCover) {
+						delete game.coverImage;
+					}
 					
 					cfg.games.push(game);
 					saveConfig(cfg);
 					
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ message: `游戏 "${game.name}" 已添加`, game }));
+					res.end(JSON.stringify({
+						message: `游戏 "${game.name}" 已添加`,
+						game: { ...game, coverUrl: coverPublicUrl(game.coverImage) }
+					}));
 				} catch (error) {
 					console.error('[Web API] Add game error:', error);
 					if (!res.headersSent) {
@@ -791,6 +1407,126 @@ async function startWebServer() {
 					res.end(JSON.stringify({ error: 'Request error' }));
 				}
 			});
+		} else if (req.url.startsWith('/api/games/') && req.url.includes('/images') && req.method === 'GET') {
+			try {
+				const parts = req.url.split('/').filter(Boolean);
+				// api games NAME images [ID file]
+				const gameName = decodeURIComponent(parts[2]);
+				if (parts.length === 4 && parts[3] === 'images') {
+					const meta = readImagesMeta(gameName);
+					const images = meta.images.map((img) => ({
+						...img,
+						url: imagePublicUrl(gameName, img.id)
+					}));
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ images }));
+					return;
+				}
+				if (parts.length === 6 && parts[3] === 'images' && parts[5] === 'file') {
+					const imageId = decodeURIComponent(parts[4]);
+					const meta = readImagesMeta(gameName);
+					const img = meta.images.find(i => i.id === imageId);
+					if (!img) {
+						res.writeHead(404, { 'Content-Type': 'text/plain' });
+						res.end('Not Found');
+						return;
+					}
+					const full = path.join(gameImagesDir(gameName), img.file);
+					if (!fs.existsSync(full)) {
+						res.writeHead(404, { 'Content-Type': 'text/plain' });
+						res.end('Not Found');
+						return;
+					}
+					res.writeHead(200, {
+						'Content-Type': mimeFromCoverExt(img.file),
+						'Cache-Control': 'public, max-age=86400'
+					});
+					fs.createReadStream(full).pipe(res);
+					return;
+				}
+				res.writeHead(400, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: 'Invalid images request' }));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url.startsWith('/api/games/') && req.url.includes('/images') && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', async () => {
+				try {
+					const parts = req.url.split('/').filter(Boolean);
+					const gameName = decodeURIComponent(parts[2]);
+					const { dataUrl, note } = JSON.parse(body);
+					const match = String(dataUrl || '').match(/^data:image\/(png|jpeg|jpg|webp|gif);base64,(.+)$/i);
+					if (!match) throw new Error('仅支持 PNG / JPG / WEBP / GIF');
+					let ext = match[1].toLowerCase();
+					if (ext === 'jpeg') ext = 'jpg';
+					const buf = Buffer.from(match[2], 'base64');
+					if (buf.length > 12 * 1024 * 1024) throw new Error('图片过大（最大 12MB）');
+
+					ensureGameBackupDirs(gameName);
+					const id = `img_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+					const file = `${id}.${ext}`;
+					await fse.writeFile(path.join(gameImagesDir(gameName), file), buf);
+					const meta = readImagesMeta(gameName);
+					const entry = {
+						id,
+						file,
+						note: typeof note === 'string' ? note : '',
+						createdAt: new Date().toISOString()
+					};
+					meta.images.unshift(entry);
+					writeImagesMeta(gameName, meta);
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({
+						message: '截图已添加',
+						image: { ...entry, url: imagePublicUrl(gameName, id) }
+					}));
+				} catch (error) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+		} else if (req.url.startsWith('/api/games/') && req.url.includes('/images/') && req.method === 'PUT') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const parts = req.url.split('/').filter(Boolean);
+					const gameName = decodeURIComponent(parts[2]);
+					const imageId = decodeURIComponent(parts[4]);
+					const { note } = JSON.parse(body);
+					const meta = readImagesMeta(gameName);
+					const img = meta.images.find(i => i.id === imageId);
+					if (!img) throw new Error('截图不存在');
+					img.note = typeof note === 'string' ? note : '';
+					writeImagesMeta(gameName, meta);
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: '备注已更新', image: { ...img, url: imagePublicUrl(gameName, img.id) } }));
+				} catch (error) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
+		} else if (req.url.startsWith('/api/games/') && req.url.includes('/images/') && req.method === 'DELETE') {
+			try {
+				const parts = req.url.split('/').filter(Boolean);
+				const gameName = decodeURIComponent(parts[2]);
+				const imageId = decodeURIComponent(parts[4]);
+				const meta = readImagesMeta(gameName);
+				const idx = meta.images.findIndex(i => i.id === imageId);
+				if (idx === -1) throw new Error('截图不存在');
+				const [removed] = meta.images.splice(idx, 1);
+				const full = path.join(gameImagesDir(gameName), removed.file);
+				if (fs.existsSync(full)) await fse.remove(full);
+				writeImagesMeta(gameName, meta);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ message: '截图已删除' }));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
 		} else if (req.url.startsWith('/api/games/') && req.method === 'PUT') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
@@ -806,60 +1542,56 @@ async function startWebServer() {
 						throw new Error(`游戏 "${oldGameName}" 不存在`);
 					}
 					
-					// 如果修改了名称，检查新名称是否已存在
 					const newGameName = gameData.name ? gameData.name.trim() : oldGameName;
 					if (newGameName !== oldGameName) {
 						if (cfg.games.find(g => g.name === newGameName && g.name !== oldGameName)) {
 							throw new Error(`游戏名称 "${newGameName}" 已存在`);
 						}
-						
-						// 重命名所有相关的备份文件夹
-						if (fs.existsSync(BACKUP_DIR)) {
-							const allBackups = fs.readdirSync(BACKUP_DIR);
-							const gameBackups = allBackups.filter(dir => dir.startsWith(`${oldGameName}_`));
-							
-							for (const backupName of gameBackups) {
-								// 提取时间戳部分（格式：游戏名_YYYYMMDD_HHmmss）
-								const timestampMatch = backupName.match(/_(\d{8}_\d{6})$/);
-								if (timestampMatch) {
-									const timestamp = timestampMatch[1];
-									const oldPath = path.join(BACKUP_DIR, backupName);
-									const newBackupName = `${newGameName}_${timestamp}`;
-									const newPath = path.join(BACKUP_DIR, newBackupName);
-									
-									try {
-										if (fs.existsSync(oldPath)) {
-											fs.renameSync(oldPath, newPath);
-											console.log(`已重命名备份文件夹: ${backupName} -> ${newBackupName}`);
-										}
-									} catch (renameError) {
-										console.error(`重命名备份文件夹失败: ${backupName}`, renameError);
-										// 继续处理其他备份，不中断整个流程
-									}
-								}
+
+						// 新结构：整个游戏备份目录改名
+						const oldRoot = gameBackupRoot(oldGameName);
+						const newRoot = gameBackupRoot(newGameName);
+						if (fs.existsSync(oldRoot)) {
+							if (fs.existsSync(newRoot)) {
+								throw new Error(`目标备份目录已存在：${newRoot}`);
+							}
+							try {
+								fs.renameSync(oldRoot, newRoot);
+								console.log(`已重命名游戏备份目录: ${oldGameName} -> ${newGameName}`);
+							} catch (renameError) {
+								console.error(`重命名游戏备份目录失败:`, renameError);
 							}
 						}
 					}
 					
-					// 更新游戏配置
-					const updatedGame = {
-						...cfg.games[gameIndex],
-						...(gameData.name ? { name: newGameName } : {}),
-						...(gameData.localPath ? { localPath: path.resolve(gameData.localPath.trim()) } : {}),
-						...(gameData.remoteFullPath !== undefined ? (gameData.remoteFullPath ? { remoteFullPath: gameData.remoteFullPath.trim().replace(/\\/g, '/') } : {}) : {}),
-						...(gameData.nobackup !== undefined ? { nobackup: gameData.nobackup } : {})
-					};
+					const updatedGame = buildGameFromPayload({ ...gameData, name: newGameName }, cfg.games[gameIndex]);
 					
-					// 确保本地目录存在
 					if (updatedGame.localPath) {
 						fse.mkdirpSync(updatedGame.localPath);
+					}
+					if (isSwitchMode(updatedGame) && updatedGame.switchPath) {
+						fse.mkdirpSync(updatedGame.switchPath);
+					}
+
+					if (gameData.coverDataUrl) {
+						updatedGame.coverImage = await saveCoverFromDataUrl(
+							updatedGame.name,
+							gameData.coverDataUrl,
+							cfg.games[gameIndex].coverImage
+						);
+					} else if (gameData.clearCover) {
+						await removeCoverFile(cfg.games[gameIndex].coverImage);
+						delete updatedGame.coverImage;
 					}
 					
 					cfg.games[gameIndex] = updatedGame;
 					saveConfig(cfg);
 					
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ message: `游戏配置已更新`, game: updatedGame }));
+					res.end(JSON.stringify({
+						message: `游戏配置已更新`,
+						game: { ...updatedGame, coverUrl: coverPublicUrl(updatedGame.coverImage) }
+					}));
 				} catch (error) {
 					console.error('[Web API] Update game error:', error);
 					if (!res.headersSent) {
@@ -885,7 +1617,9 @@ async function startWebServer() {
 				if (gameIndex === -1) {
 					throw new Error(`游戏 "${gameName}" 不存在`);
 				}
-				
+
+				const removed = cfg.games[gameIndex];
+				await removeCoverFile(removed.coverImage);
 				cfg.games.splice(gameIndex, 1);
 				saveConfig(cfg);
 				
@@ -902,60 +1636,40 @@ async function startWebServer() {
 			try {
 				const parts = req.url.split('/');
 				const gameName = decodeURIComponent(parts[3]);
-				
-				if (!fs.existsSync(BACKUP_DIR)) {
-					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ count: 0, backups: [] }));
-					return;
-				}
-				
-				const allBackups = fs.readdirSync(BACKUP_DIR);
-				const gameBackups = allBackups.filter(dir => dir.startsWith(`${gameName}_`));
-				
+				const backupIds = listBackupIds(gameName);
+
 				// 如果只请求数量（旧API兼容）
 				if (parts.length === 4) {
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ count: gameBackups.length }));
+					res.end(JSON.stringify({ count: backupIds.length }));
 					return;
 				}
-				
+
 				// 如果请求详细列表
 				if (parts.length === 5 && parts[4] === 'list') {
 					const backupList = [];
-					for (const backupName of gameBackups) {
-						const backupPath = path.join(BACKUP_DIR, backupName);
+					for (const backupId of backupIds) {
+						const backupPath = backupInstancePath(gameName, backupId);
 						try {
 							const stats = fs.statSync(backupPath);
 							const localPath = path.join(backupPath, 'local');
 							let size = 0;
 							let hasLocal = false;
 							let hasRemote = false;
-							
+
 							if (fs.existsSync(localPath)) {
 								hasLocal = true;
 								size += getDirSize(localPath);
 							}
-							
+
 							const remotePath = path.join(backupPath, 'remote');
 							if (fs.existsSync(remotePath)) {
 								hasRemote = true;
 								size += getDirSize(remotePath);
 							}
-							
-							// 解析时间戳（格式：游戏名_YYYYMMDD_HHmmss）
-							const timestampMatch = backupName.match(/_(\d{8}_\d{6})$/);
-							let backupTime = stats.mtime;
-							if (timestampMatch) {
-								const ts = timestampMatch[1];
-								const year = ts.substring(0, 4);
-								const month = ts.substring(4, 6);
-								const day = ts.substring(6, 8);
-								const hour = ts.substring(9, 11);
-								const minute = ts.substring(11, 13);
-								const second = ts.substring(13, 15);
-								backupTime = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`);
-							}
-							
+
+							const backupTime = parseBackupTime(backupId, stats.mtime);
+
 							let displayName = null;
 							let syncDirection = null;
 							const metaPath = path.join(backupPath, 'displayName.json');
@@ -965,12 +1679,12 @@ async function startWebServer() {
 									displayName = meta.displayName || null;
 									syncDirection = meta.syncDirection || null;
 								} catch (err) {
-									console.error(`Error reading displayName for ${backupName}:`, err);
+									console.error(`Error reading displayName for ${backupId}:`, err);
 								}
 							}
-							
+
 							backupList.push({
-								name: backupName,
+								name: backupId,
 								time: backupTime.toISOString(),
 								size: size,
 								hasLocal,
@@ -979,18 +1693,17 @@ async function startWebServer() {
 								syncDirection
 							});
 						} catch (err) {
-							console.error(`Error reading backup ${backupName}:`, err);
+							console.error(`Error reading backup ${backupId}:`, err);
 						}
 					}
-					
-					// 按时间倒序排列
+
 					backupList.sort((a, b) => new Date(b.time) - new Date(a.time));
-					
+
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ count: gameBackups.length, backups: backupList }));
+					res.end(JSON.stringify({ count: backupIds.length, backups: backupList }));
 					return;
 				}
-				
+
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid request' }));
 			} catch (error) {
@@ -1002,16 +1715,10 @@ async function startWebServer() {
 				const parts = req.url.split('/');
 				const gameName = decodeURIComponent(parts[3]);
 				const backupName = decodeURIComponent(parts[4]);
-				
-				if (!backupName || !backupName.startsWith(`${gameName}_`)) {
-					throw new Error('Invalid backup name');
-				}
-				
-				const backupPath = path.join(BACKUP_DIR, backupName);
-				if (!fs.existsSync(backupPath)) {
+				const backupPath = backupInstancePath(gameName, backupName);
+				if (!backupPath || !fs.existsSync(backupPath)) {
 					throw new Error('Backup not found');
 				}
-				
 				await fse.remove(backupPath);
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ message: `Backup ${backupName} deleted successfully` }));
@@ -1027,24 +1734,21 @@ async function startWebServer() {
 					const parts = req.url.split('/');
 					const gameName = decodeURIComponent(parts[3]);
 					const backupName = decodeURIComponent(parts[4]);
-					
-					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
-						throw new Error('Invalid backup name');
-					}
-					
 					const { displayName } = JSON.parse(body);
 					if (!displayName || typeof displayName !== 'string') {
 						throw new Error('Invalid display name');
 					}
-					
-					const backupPath = path.join(BACKUP_DIR, backupName);
-					if (!fs.existsSync(backupPath)) {
+					const backupPath = backupInstancePath(gameName, backupName);
+					if (!backupPath || !fs.existsSync(backupPath)) {
 						throw new Error('Backup not found');
 					}
-					
 					const metaPath = path.join(backupPath, 'displayName.json');
-					await fs.promises.writeFile(metaPath, JSON.stringify({ displayName }), 'utf8');
-					
+					let meta = {};
+					if (fs.existsSync(metaPath)) {
+						try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch { }
+					}
+					meta.displayName = displayName;
+					await fs.promises.writeFile(metaPath, JSON.stringify(meta), 'utf8');
 					res.writeHead(200, { 'Content-Type': 'application/json' });
 					res.end(JSON.stringify({ message: 'Backup renamed successfully' }));
 				} catch (error) {
@@ -1060,31 +1764,19 @@ async function startWebServer() {
 					const parts = req.url.split('/');
 					const gameName = decodeURIComponent(parts[3]);
 					const backupName = decodeURIComponent(parts[4]);
-					
-					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
-						throw new Error('Invalid backup name');
-					}
-					
 					const cfg = loadConfig();
 					const game = cfg.games.find(g => g.name === gameName);
 					if (!game) {
 						throw new Error(`Game '${gameName}' not found`);
 					}
-					
-					const backupPath = path.join(BACKUP_DIR, backupName);
-					const localBackupPath = path.join(backupPath, 'local');
-					
-					if (!fs.existsSync(localBackupPath)) {
+					const backupPath = backupInstancePath(gameName, backupName);
+					const localBackupPath = backupPath ? path.join(backupPath, 'local') : null;
+					if (!localBackupPath || !fs.existsSync(localBackupPath)) {
 						throw new Error('Local backup not found');
 					}
-					
-					// 先备份当前本地存档
 					await backupLocalOnly(game);
-					
-					// 恢复备份
 					await fse.emptyDir(game.localPath);
 					await fse.copy(localBackupPath, game.localPath, { overwrite: true });
-					
 					res.writeHead(200, { 'Content-Type': 'application/json' });
 					res.end(JSON.stringify({ message: `Backup ${backupName} restored successfully` }));
 				} catch (error) {
@@ -1124,24 +1816,154 @@ async function startWebServer() {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ message: error.message }));
 			}
+		} else if (req.url === '/api/remote' && req.method === 'GET') {
+			try {
+				const cfg = loadConfig();
+				const remote = cfg.remote || {};
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({
+					host: remote.host || '',
+					port: remote.port || 22,
+					user: remote.user || '',
+					hasPassword: Boolean(remote.password),
+					passwordHint: remote.password ? `已设置（${remote.password.length} 字符）` : '未设置'
+				}));
+			} catch (error) {
+				res.writeHead(500, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify({ error: error.message }));
+			}
+		} else if (req.url === '/api/remote' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => { body += chunk.toString(); });
+			req.on('end', () => {
+				try {
+					const { host, port, user, password } = JSON.parse(body);
+					if (!host || !user) {
+						throw new Error('主机地址和用户名为必填项');
+					}
+					const cfg = loadConfig();
+					cfg.remote = {
+						...(cfg.remote || {}),
+						host: String(host).trim(),
+						port: Number(port) || 22,
+						user: String(user).trim()
+					};
+					// 密码留空表示保持原密码不变
+					if (password !== undefined && password !== '') {
+						cfg.remote.password = String(password);
+					}
+					saveConfig(cfg);
+					res.writeHead(200, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ message: 'SSH 配置已保存', remote: { host: cfg.remote.host, port: cfg.remote.port, user: cfg.remote.user } }));
+				} catch (error) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: error.message }));
+				}
+			});
 		} else if (req.url === '/api/open-folder' && req.method === 'POST') {
 			let body = '';
 			req.on('data', chunk => { body += chunk.toString(); });
 			req.on('end', async () => {
 				try {
-					const { game: gameName } = JSON.parse(body);
+					const { game: gameName, side } = JSON.parse(body);
 					const cfg = loadConfig();
 					const game = cfg.games.find(g => g.name === gameName);
 					if (!game) throw new Error(`Game '${gameName}' not found.`);
 
+					let targetPath = game.localPath;
+					if (side === 'switch') {
+						targetPath = getSwitchPath(game);
+					} else if (side === 'images') {
+						ensureGameBackupDirs(gameName);
+						targetPath = gameImagesDir(gameName);
+					} else if (side === 'remote' && game.remoteFullPath) {
+						// remote is SSH path, can't open locally — open local instead
+						targetPath = game.localPath;
+					}
+					if (!fs.existsSync(targetPath)) {
+						fse.mkdirpSync(targetPath);
+					}
+
 					const platform = os.platform();
 					const command = platform === 'win32' ? 'explorer' : (platform === 'darwin' ? 'open' : 'xdg-open');
-					spawn(command, [game.localPath], { detached: true, stdio: 'ignore' }).unref();
+					spawn(command, [targetPath], { detached: true, stdio: 'ignore' }).unref();
 
 					res.writeHead(200, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ message: `Opened folder for ${gameName}` }));
+					res.end(JSON.stringify({ message: `Opened folder for ${gameName}`, path: targetPath }));
 				} catch (error) {
 					console.error('[Web API] Open folder error:', error);
+					if (!res.headersSent) {
+						res.writeHead(500, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: error.message }));
+					}
+				}
+			});
+			req.on('error', (err) => {
+				console.error('[Web API] Request error:', err);
+				if (!res.headersSent) {
+					res.writeHead(500, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ error: 'Request error' }));
+				}
+			});
+		} else if (req.url === '/api/sync' && req.method === 'POST') {
+			let body = '';
+			req.on('data', chunk => {
+				body += chunk.toString();
+			});
+			req.on('end', async () => {
+				try {
+					const { game: gameName, direction } = JSON.parse(body);
+					const cfg = loadConfig();
+					const game = cfg.games.find(g => g.name === gameName);
+
+					if (!game) {
+						throw new Error(`Game '${gameName}' not found.`);
+					}
+
+					const normalizedDir = normalizeDirectionInput(direction);
+					if (!normalizedDir) {
+						throw new Error(`Invalid direction: ${direction}`);
+					}
+
+					console.log(`[Web API] Received action: ${normalizedDir} for ${game.name} (mode=${game.syncMode || 'remote'})`);
+
+					if (normalizedDir === 'backupLocal') {
+						await backupLocalOnly(game);
+						res.writeHead(200, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: `Successfully backed up ${game.name} locally.` }));
+					} else if (isLocalMode(game)) {
+						throw new Error(`游戏 "${game.name}" 为仅本地模式，只能备份，不能同步`);
+					} else if (isSwitchMode(game)) {
+						await backupPcAndSwitch(game, normalizedDir);
+						if (normalizedDir === 'push') {
+							await syncPcToSwitch(game);
+						} else if (normalizedDir === 'pull') {
+							await syncSwitchToPc(game);
+						}
+						res.writeHead(200, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({
+							message: `Switch 同步「${directionLabel(normalizedDir, game)}」完成：${game.name}`
+						}));
+						console.log(`Switch sync '${normalizedDir}' for ${game.name} completed.`);
+					} else {
+						const remote = cfg.remote;
+						if (!remote || !remote.host || !remote.user) {
+							throw new Error('SSH未配置，请在网页右上角「SSH 设置」中填写');
+						}
+						await backupBoth(game, remote, normalizedDir);
+
+						if (normalizedDir === 'push') {
+							await syncLocalToRemote_SFTP(game, remote);
+						} else if (normalizedDir === 'pull') {
+							await syncRemoteToLocal_SFTP(game, remote);
+						}
+						res.writeHead(200, { 'Content-Type': 'application/json' });
+						res.end(JSON.stringify({ message: `Sync '${normalizedDir}' for ${game.name} completed.` }));
+						console.log(`Sync '${normalizedDir}' for ${game.name} completed.`);
+						console.log(`-----`);
+					}
+				} catch (error) {
+					console.error('[Web API] Sync error:', error);
 					if (!res.headersSent) {
 						res.writeHead(500, { 'Content-Type': 'application/json' });
 						res.end(JSON.stringify({ message: error.message }));
@@ -1161,12 +1983,8 @@ async function startWebServer() {
 			req.on('end', async () => {
 				try {
 					const { game: gameName, backup: backupName } = JSON.parse(body);
-					if (!backupName || !backupName.startsWith(`${gameName}_`)) {
-						throw new Error('Invalid backup name');
-					}
-
-					const backupPath = path.join(BACKUP_DIR, backupName);
-					if (!fs.existsSync(backupPath)) {
+					const backupPath = backupInstancePath(gameName, backupName);
+					if (!backupPath || !fs.existsSync(backupPath)) {
 						throw new Error('Backup not found');
 					}
 
@@ -1432,64 +2250,6 @@ async function startWebServer() {
 				res.writeHead(500, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: error.message }));
 			}
-		} else if (req.url === '/api/sync' && req.method === 'POST') {
-			let body = '';
-			req.on('data', chunk => {
-				body += chunk.toString();
-			});
-			req.on('end', async () => {
-				try {
-					const { game: gameName, direction } = JSON.parse(body);
-					const cfg = loadConfig();
-					const game = cfg.games.find(g => g.name === gameName);
-
-					if (!game) {
-						throw new Error(`Game '${gameName}' not found.`);
-					}
-
-					const normalizedDir = normalizeDirectionInput(direction);
-					if (!normalizedDir) {
-						throw new Error(`Invalid direction: ${direction}`);
-					}
-
-					console.log(`[Web API] Received action: ${normalizedDir} for ${game.name}`);
-
-					if (normalizedDir === 'backupLocal') {
-						await backupLocalOnly(game);
-						res.writeHead(200, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ message: `Successfully backed up ${game.name} locally.` }));
-					} else {
-						const remote = cfg.remote;
-						if (!remote || !remote.host || !remote.user) {
-							throw new Error('SSH未配置，请在配置文件中设置');
-						}
-						await backupBoth(game, remote, normalizedDir);
-
-						if (normalizedDir === 'push') {
-							await syncLocalToRemote_SFTP(game, remote);
-						} else if (normalizedDir === 'pull') {
-							await syncRemoteToLocal_SFTP(game, remote);
-						}
-						res.writeHead(200, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ message: `Sync '${normalizedDir}' for ${game.name} completed.` }));
-						console.log(`Sync '${normalizedDir}' for ${game.name} completed.`);
-						console.log(`-----`);
-					}
-				} catch (error) {
-					console.error('[Web API] Sync error:', error);
-					if (!res.headersSent) {
-						res.writeHead(500, { 'Content-Type': 'application/json' });
-						res.end(JSON.stringify({ message: error.message }));
-					}
-				}
-			});
-			req.on('error', (err) => {
-				console.error('[Web API] Request error:', err);
-				if (!res.headersSent) {
-					res.writeHead(500, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ error: 'Request error' }));
-				}
-			});
 		} else {
 			res.writeHead(404, { 'Content-Type': 'text/plain' });
 			res.end('Not Found');
@@ -1533,58 +2293,121 @@ async function startWebServer() {
 	});
 
 	// 启动服务器
-	server.listen(port, () => {
-		const url = `http://localhost:${port}`;
-		console.log(`✅ Web 服务器已启动: ${url}`);
-		console.log('按 Ctrl+C 停止服务器');
-		try {
-			const platform = os.platform();
-			const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
-			spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
-		} catch (e) {
-			console.error('无法自动打开浏览器:', e);
+	await new Promise((resolve, reject) => {
+		server.once('error', reject);
+		server.listen(port, () => {
+			const url = `http://localhost:${port}`;
+			webServerInfo = { port, url, server };
+			console.log(`✅ Web 服务器已启动: ${url}`);
+			if (openBrowser) {
+				try {
+					const platform = os.platform();
+					const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
+					spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
+				} catch (e) {
+					console.error('无法自动打开浏览器:', e);
+				}
+			}
+			resolve();
+		});
+	});
+
+	return webServerInfo;
+}
+
+async function startTrayMode({ openBrowser = false } = {}) {
+	if (os.platform() !== 'win32') {
+		console.log('当前系统非 Windows，托盘模式将仅启动 Web 服务。');
+	}
+
+	const info = await startWebServer({ openBrowser });
+	console.log(`托盘模式运行中：${info.url}`);
+	console.log('可从系统托盘图标控制；关闭托盘菜单中的「退出」结束程序。');
+
+	let SysTray;
+	try {
+		const mod = require('systray2');
+		SysTray = mod?.default || mod?.SysTray || mod;
+		if (typeof SysTray !== 'function') {
+			throw new Error(`无法识别 SysTray 构造函数（typeof=${typeof SysTray}）`);
+		}
+	} catch (err) {
+		console.error('无法加载托盘模块 systray2，请执行 npm install。', err.message || err);
+		console.log('Web 服务仍在运行，按 Ctrl+C 退出。');
+		await new Promise(() => {});
+		return;
+	}
+
+	if (!fs.existsSync(FAVICON_PATH) && !fs.existsSync(TRAY_ICON_PATH)) {
+		console.warn(`未找到图标文件（src/favicon.png），托盘可能无图标。`);
+	}
+
+	const iconBase64 = loadTrayIconBase64();
+
+	const itemOpenWeb = { title: '打开 Web 界面', tooltip: info.url, checked: false, enabled: true };
+	const itemOpenBackup = { title: '打开备份文件夹', tooltip: BACKUP_DIR, checked: false, enabled: true };
+	const itemOpenConfig = { title: '打开配置文件', tooltip: CONFIG_PATH, checked: false, enabled: true };
+	const itemExit = { title: '退出', tooltip: '退出 Game Save Manager', checked: false, enabled: true };
+
+	const systray = new SysTray({
+		menu: {
+			icon: iconBase64,
+			title: 'GSM',
+			tooltip: `Game Save Manager\n${info.url}`,
+			items: [
+				itemOpenWeb,
+				itemOpenBackup,
+				itemOpenConfig,
+				SysTray.separator,
+				itemExit
+			]
+		},
+		debug: false,
+		copyDir: true
+	});
+
+	systray.onClick((action) => {
+		const title = action?.item?.title;
+		if (title === '打开 Web 界面') {
+			openWebPage().catch((e) => console.error(e));
+			return;
+		}
+		if (title === '打开备份文件夹') {
+			openBackupDir().catch((e) => console.error(e));
+			return;
+		}
+		if (title === '打开配置文件') {
+			openConfigFile().catch((e) => console.error(e));
+			return;
+		}
+		if (title === '退出') {
+			try { systray.kill(false); } catch { }
+			process.exit(0);
 		}
 	});
 
-	// 如果启动时端口被占用（虽然我们已经检查过，但以防万一）
-	server.on('error', (err) => {
-		if (err.code === 'EADDRINUSE') {
-			console.error(`❌ 端口 ${port} 被占用，尝试查找其他可用端口...`);
-			findAvailablePort(port + 1, 10).then(newPort => {
-				console.log(`🔄 正在端口 ${newPort} 上重新启动服务器...`);
-				server.listen(newPort, () => {
-					const url = `http://localhost:${newPort}`;
-					console.log(`✅ Web 服务器已启动: ${url}`);
-					try {
-						const platform = os.platform();
-						const command = platform === 'win32' ? 'start' : (platform === 'darwin' ? 'open' : 'xdg-open');
-						spawn(command, [url], { detached: true, stdio: 'ignore', shell: true }).unref();
-					} catch (e) {
-						console.error('无法自动打开浏览器:', e);
-					}
-				});
-			}).catch(e => {
-				console.error('❌ 无法找到可用端口:', e.message);
-				process.exit(1);
-			});
-		} else {
-			console.error('[Web Server] 服务器错误:', err);
-		}
-	});
-
+	await new Promise(() => {});
 }
 
 async function run() {
 	ensureDirs();
 	const args = parseArgs(process.argv.slice(2));
 
+	if (args.tray) {
+		return startTrayMode({ openBrowser: Boolean(args.open || args.browser) });
+	}
+
 	if (args.web) {
-		return startWebServer();
+		return startWebServer({ openBrowser: true });
 	}
 
 	while (true) {
 		const cfg = loadConfig();
 		const game = await pickOrCreateGame(cfg, args.game);
+
+		if (game === 'tray-running') {
+			return;
+		}
 
 		if (!game) {
 			console.log('\n返回主菜单...');
@@ -1593,7 +2416,7 @@ async function run() {
 			continue;
 		}
 
-		const direction = await resolveDirection(args.direction);
+		const direction = await resolveDirection(args.direction, game);
 		
 		if (direction === null) {
 			console.log('\n返回上级菜单...');
@@ -1604,6 +2427,22 @@ async function run() {
 		
 		if (direction === 'backupLocal') {
 			await backupLocalOnly(game);
+		} else if (isLocalMode(game)) {
+			console.error(`游戏 "${game.name}" 为仅本地模式，只能备份，不能同步。`);
+			process.exitCode = 1;
+		} else if (isSwitchMode(game)) {
+			try {
+				console.log(`Switch 同步模式：${directionLabel(direction, game)}`);
+				await backupPcAndSwitch(game, direction);
+				if (direction === 'push') {
+					await syncPcToSwitch(game);
+				} else {
+					await syncSwitchToPc(game);
+				}
+			} catch (err) {
+				console.error('Switch 同步失败：', err.message || err);
+				process.exitCode = 1;
+			}
 		} else {
 			const remote = await ensureRemote(cfg);
 			const ensuredGame = await ensureGameRemotePath(game, cfg);

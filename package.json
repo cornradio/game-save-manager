@@ -5,13 +5,16 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "web": "node src/index.js --web",
+    "tray": "node src/index.js --tray --open"
   },
   "dependencies": {
     "dayjs": "^1.11.13",
     "fs-extra": "^11.2.0",
     "inquirer": "^9.3.7",
     "ssh2-sftp-client": "^9.1.0",
+    "systray2": "^2.1.4",
     "which": "^4.0.0"
   }
 }

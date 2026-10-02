@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🕹️ Game Save Manager</title>
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="shortcut icon" type="image/png" href="/favicon.png">
 
     <style>
         :root {
@@ -102,12 +104,13 @@
 
         .game-item-actions {
             position: absolute;
-            top: 0.25em;
-            right: 0.4em;
+            top: 6px;
+            right: 6px;
             display: flex;
             gap: 2px;
             opacity: 0;
             transition: opacity 0.2s;
+            z-index: 2;
         }
 
         .game-item:hover .game-item-actions {
@@ -190,7 +193,8 @@
         }
 
         .form-group input,
-        .form-group textarea {
+        .form-group textarea,
+        .form-group select {
             width: 100%;
             padding: 8px 12px;
             background: #141414;
@@ -202,9 +206,118 @@
         }
 
         .form-group input:focus,
-        .form-group textarea:focus {
+        .form-group textarea:focus,
+        .form-group select:focus {
             outline: none;
             border-color: var(--accent);
+        }
+
+        .form-hint {
+            margin-top: 6px;
+            font-size: 0.78em;
+            color: var(--text-soft);
+            line-height: 1.45;
+        }
+
+        .mode-picker {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .mode-option {
+            position: relative;
+            display: block;
+            margin: 0;
+            cursor: pointer;
+        }
+
+        .mode-option input {
+            position: absolute;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .mode-option-card {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            padding: 12px 14px;
+            background: #141414;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+
+        .mode-option:hover .mode-option-card {
+            border-color: rgba(84, 250, 6, 0.45);
+        }
+
+        .mode-option input:checked + .mode-option-card {
+            border-color: var(--accent);
+            background: rgba(84, 250, 6, 0.08);
+            box-shadow: inset 0 0 0 1px rgba(84, 250, 6, 0.25);
+        }
+
+        .mode-option-icon {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #1c1c1c;
+            border: 1px solid var(--border);
+            font-size: 1.1em;
+        }
+
+        .mode-option input:checked + .mode-option-card .mode-option-icon {
+            border-color: rgba(84, 250, 6, 0.5);
+            background: rgba(84, 250, 6, 0.12);
+        }
+
+        .mode-option-text {
+            min-width: 0;
+        }
+
+        .mode-option-title {
+            font-size: 0.92em;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 2px;
+        }
+
+        .mode-option-desc {
+            font-size: 0.75em;
+            color: var(--text-soft);
+            line-height: 1.4;
+        }
+
+        .mode-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.7em;
+            vertical-align: middle;
+            border: 1px solid var(--border);
+            color: var(--text-soft);
+        }
+
+        .mode-badge.switch {
+            border-color: #54fa06;
+            color: #54fa06;
+        }
+
+        .mode-badge.local {
+            border-color: #6eb6ff;
+            color: #6eb6ff;
+        }
+
+        .mode-badge.remote {
+            border-color: #ffb84d;
+            color: #ffb84d;
         }
 
         .form-group textarea {
@@ -299,17 +412,37 @@
         .game-list {
             flex: 1;
             overflow-y: auto;
-            padding: 1em;
+            padding: 0.85em;
+        }
+
+        .game-list.drag-over {
+            outline: 1px dashed rgba(84, 250, 6, 0.35);
+            outline-offset: -4px;
         }
 
         .game-item {
+            display: flex;
+            gap: 10px;
+            align-items: center;
             background: rgba(20, 20, 20, 0.5);
             border: 1px solid var(--border);
             border-radius: 8px;
-            padding: 0.45em 0.7em;
-            margin-bottom: 0.35em;
-            cursor: pointer;
-            transition: 0.25s;
+            padding: 8px;
+            margin-bottom: 0.5em;
+            cursor: grab;
+            transition: border-color 0.2s, background 0.2s, transform 0.15s, opacity 0.15s;
+            position: relative;
+            user-select: none;
+        }
+
+        .game-item.dragging {
+            opacity: 0.45;
+            cursor: grabbing;
+        }
+
+        .game-item.drag-target {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(84, 250, 6, 0.35);
         }
 
         .game-item:hover {
@@ -322,18 +455,533 @@
             background: var(--selected);
         }
 
+        .game-item-handle {
+            color: #666;
+            font-size: 0.85em;
+            cursor: grab;
+            padding: 0 2px;
+            flex-shrink: 0;
+            line-height: 1;
+        }
+
+        .game-item-cover-wrap {
+            width: 64px;
+            height: 64px;
+            border-radius: 6px;
+            background: #121212;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .game-item-cover {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        .game-item-cover.placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #555;
+            font-size: 1.2em;
+            background: linear-gradient(160deg, #2a2a2a, #151515);
+        }
+
+        .game-item-meta {
+            min-width: 0;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding-right: 28px;
+        }
+
         .game-item h3 {
             margin: 0;
             font-size: 0.88rem;
             font-weight: 600;
             color: #fff;
             line-height: 1.3;
+            word-break: break-word;
         }
 
         .game-item .backup-count {
             font-size: 0.72em;
             color: var(--text-soft);
             line-height: 1.3;
+            margin-top: 4px;
+        }
+
+        /* 悬停放大预览 */
+        #cover-zoom {
+            display: none;
+            position: fixed;
+            z-index: 3000;
+            pointer-events: none;
+            padding: 6px;
+            background: #121212;
+            border: 1px solid rgba(84, 250, 6, 0.45);
+            border-radius: 10px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+            max-width: min(280px, 42vw);
+            max-height: min(380px, 70vh);
+        }
+
+        #cover-zoom.show {
+            display: block;
+        }
+
+        #cover-zoom img {
+            display: block;
+            max-width: min(268px, calc(42vw - 12px));
+            max-height: min(368px, calc(70vh - 12px));
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        /* 详情页小海报：完整展示，不裁切 */
+        .game-hero-wrap {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            margin-bottom: 1em;
+        }
+
+        .game-hero {
+            width: 120px;
+            height: 120px;
+            flex-shrink: 0;
+            border-radius: 8px;
+            background: #121212;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .game-hero img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }
+
+        .game-hero.placeholder {
+            color: #555;
+            font-size: 1.6em;
+        }
+
+        .game-list-hint {
+            font-size: 0.7em;
+            color: #666;
+            padding: 0 4px 8px;
+            line-height: 1.3;
+        }
+
+        .album-card {
+            margin-top: 1.2em;
+            position: relative;
+        }
+
+        .album-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .album-header h3 {
+            margin: 0;
+            border: none;
+            padding: 0;
+        }
+
+        .album-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .album-icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-soft);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s ease;
+            padding: 0;
+        }
+
+        .album-icon-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .album-icon-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        .album-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .album-toolbar button {
+            padding: 7px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.82em;
+        }
+
+        .album-toolbar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .album-hint {
+            font-size: 0.75em;
+            color: var(--text-soft);
+        }
+
+        .album-drop-overlay {
+            display: none;
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            border-radius: var(--radius);
+            border: 2px dashed var(--accent);
+            background: rgba(15, 20, 15, 0.88);
+            backdrop-filter: blur(4px);
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            font-size: 0.95em;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            pointer-events: none;
+        }
+
+        .album-card.dragging-over .album-drop-overlay {
+            display: flex;
+        }
+
+        .album-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+        }
+
+        .album-item {
+            background: #141414;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+
+        .album-item:hover {
+            border-color: var(--accent);
+            transform: translateY(-1px);
+        }
+
+        .album-item img {
+            width: 100%;
+            height: 90px;
+            object-fit: cover;
+            display: block;
+            background: #0a0a0a;
+        }
+
+        .album-item .album-note {
+            padding: 6px 8px;
+            font-size: 0.72em;
+            color: var(--text-soft);
+            min-height: 2.2em;
+            line-height: 1.3;
+            word-break: break-word;
+        }
+
+        .lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 4000;
+            background: rgba(0, 0, 0, 0.9);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .lightbox.show {
+            display: flex;
+        }
+
+        .lightbox-stage {
+            position: relative;
+            width: min(92vw, 1100px);
+            height: min(82vh, 820px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .lightbox-stage img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+            transform-origin: center center;
+            transition: transform 0.08s linear;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+
+        .lb-btn {
+            position: absolute;
+            z-index: 2;
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,0.12);
+            background: rgba(20, 20, 20, 0.72);
+            color: #eee;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(8px);
+            transition: 0.2s ease;
+            padding: 0;
+        }
+
+        .lb-btn:hover {
+            border-color: rgba(84, 250, 6, 0.55);
+            color: var(--accent);
+            background: rgba(25, 25, 25, 0.9);
+        }
+
+        .lb-btn.danger:hover {
+            border-color: rgba(255, 107, 107, 0.7);
+            color: #ff6b6b;
+        }
+
+        .lb-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .lb-btn.top-left { top: 18px; left: 18px; }
+        .lb-btn.top-right-close { top: 18px; right: 18px; }
+        .lb-btn.top-right-note { top: 18px; right: 68px; }
+
+        .lightbox-note-panel {
+            position: absolute;
+            top: 66px;
+            right: 18px;
+            width: min(280px, calc(100vw - 48px));
+            background: rgba(18, 18, 18, 0.92);
+            border: 1px solid rgba(255,255,255,0.12);
+            border-radius: 12px;
+            padding: 12px;
+            backdrop-filter: blur(10px);
+            display: none;
+            z-index: 3;
+        }
+
+        .lightbox-note-panel.show {
+            display: block;
+        }
+
+        .lightbox-note-panel label {
+            display: block;
+            font-size: 0.75em;
+            color: var(--text-soft);
+            margin-bottom: 8px;
+        }
+
+        .lightbox-note-panel textarea {
+            width: 100%;
+            min-height: 110px;
+            resize: vertical;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #101010;
+            color: var(--text-main);
+            padding: 10px;
+            font: inherit;
+            font-size: 0.9em;
+            line-height: 1.4;
+        }
+
+        .lightbox-note-panel textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .lightbox-note-hint {
+            margin-top: 6px;
+            font-size: 0.7em;
+            color: #666;
+        }
+
+        .wizard-steps {
+            margin-top: 8px;
+            font-size: 0.8em;
+            color: var(--text-soft);
+        }
+
+        .wizard-steps .on {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .mode-summary-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 10px 12px;
+            margin-bottom: 1em;
+            background: rgba(84, 250, 6, 0.06);
+            border: 1px solid rgba(84, 250, 6, 0.25);
+            border-radius: 8px;
+        }
+
+        .mode-summary-bar .label {
+            font-size: 0.88em;
+            color: var(--text-main);
+        }
+
+        .mode-summary-bar button {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.8em;
+            white-space: nowrap;
+        }
+
+        .mode-summary-bar button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .cover-dropzone {
+            position: relative;
+            width: 100%;
+            max-width: 220px;
+            aspect-ratio: 2 / 3;
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            background: #141414;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            cursor: pointer;
+            outline: none;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .cover-dropzone:hover,
+        .cover-dropzone:focus,
+        .cover-dropzone.active {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(84, 250, 6, 0.15);
+        }
+
+        .cover-dropzone img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .cover-dropzone .cover-placeholder {
+            text-align: center;
+            padding: 12px;
+            color: var(--text-soft);
+            font-size: 0.8em;
+            line-height: 1.45;
+        }
+
+        .cover-dropzone .cover-placeholder strong {
+            display: block;
+            color: #fff;
+            margin-bottom: 4px;
+            font-size: 0.95em;
+        }
+
+        .cover-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+            max-width: 220px;
+        }
+
+        .cover-actions button {
+            flex: 1;
+            padding: 6px 8px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            background: #151515;
+            color: var(--text-main);
+            cursor: pointer;
+            font-size: 0.78em;
+        }
+
+        .cover-actions button:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .cover-layout {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            margin-bottom: 1.2em;
+        }
+
+        .cover-layout .cover-fields {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .modal-content.wizard {
+            min-width: min(640px, 92vw);
+            width: 640px;
         }
 
         /* 右侧详情面板 */
@@ -1110,8 +1758,8 @@
                 <h1>🕹️ GSM</h1>
                 <div style="display:flex; gap:4px; position:absolute; right:10px; top:12px;">
                     <button class="settings-gear" onclick="openBackupsFolder()" title="备份文件夹">📂</button>
-                    <button class="settings-gear" onclick="openConfig()" title="修改配置">📜</button>
-                    <button class="settings-gear" onclick="connectSSH()" title="SSH">⛓</button>
+                    <button class="settings-gear" onclick="showSshModal()" title="SSH 设置">⛓</button>
+                    <button class="settings-gear" onclick="openConfig()" title="打开配置文件（高级）">📜</button>
                 </div>
             </div>
             <div class="game-list" id="game-list">
@@ -1144,41 +1792,178 @@
 
     <div class="settings-modal" id="panel-settings-menu"></div>
     <div id="toast-container"></div>
+    <div id="cover-zoom"><img alt=""></div>
+    <div id="lightbox" class="lightbox">
+        <button type="button" class="lb-btn top-left danger" title="删除" onclick="deleteLightboxImage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+        </button>
+        <button type="button" class="lb-btn top-right-note" title="备注" onclick="toggleLightboxNote(event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h6"/></svg>
+        </button>
+        <button type="button" class="lb-btn top-right-close" title="关闭" onclick="closeLightbox()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+        <div class="lightbox-note-panel" id="lightbox-note-panel" onclick="event.stopPropagation()">
+            <label>备注（自动保存）</label>
+            <textarea id="lightbox-note" placeholder="写点什么…" oninput="onLightboxNoteInput()"></textarea>
+            <div class="lightbox-note-hint" id="lightbox-note-hint">输入后自动保存</div>
+        </div>
+        <div class="lightbox-stage" id="lightbox-stage">
+            <img id="lightbox-img" alt="">
+        </div>
+    </div>
 
-    <!-- 游戏配置模态框 -->
+    <!-- 游戏配置向导 -->
     <div id="game-modal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content wizard">
             <div class="modal-header">
                 <h2 id="modal-title">添加游戏</h2>
+                <div class="wizard-steps" id="wizard-steps">
+                    <span id="step-indicator-1" class="on">1. 选择模式</span>
+                    ·
+                    <span id="step-indicator-2">2. 填写信息</span>
+                </div>
             </div>
             <div class="modal-body">
-                <form id="game-form">
-                    <div class="form-group">
-                        <label>游戏名称 *</label>
-                        <input type="text" id="game-name" required placeholder="例如：我的世界">
-                        <div class="help-link">
-                            <a href="https://emojidb.org/" target="_blank" rel="noopener noreferrer">🎨 挑选 Emoji</a>
+                <!-- Step 1: 选模式 -->
+                <div id="wizard-step-mode">
+                    <p class="form-hint" style="margin-top:0; margin-bottom:1em;">先选择你要怎么管理这份存档（类似安装向导）。</p>
+                    <div class="mode-picker">
+                        <label class="mode-option">
+                            <input type="radio" name="sync-mode" value="local" checked onchange="onSyncModeChange()">
+                            <div class="mode-option-card">
+                                <div class="mode-option-icon">💾</div>
+                                <div class="mode-option-text">
+                                    <div class="mode-option-title">仅本地备份</div>
+                                    <div class="mode-option-desc">只管理本机存档备份/回滚，不同步到别处。最适合入门。</div>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="mode-option">
+                            <input type="radio" name="sync-mode" value="remote" onchange="onSyncModeChange()">
+                            <div class="mode-option-card">
+                                <div class="mode-option-icon">🖥️</div>
+                                <div class="mode-option-text">
+                                    <div class="mode-option-title">PC ↔ 远程电脑</div>
+                                    <div class="mode-option-desc">通过 SSH 与掌机/另一台 PC 双向同步存档。</div>
+                                </div>
+                            </div>
+                        </label>
+                        <label class="mode-option">
+                            <input type="radio" name="sync-mode" value="switch" onchange="onSyncModeChange()">
+                            <div class="mode-option-card">
+                                <div class="mode-option-icon">🎮</div>
+                                <div class="mode-option-text">
+                                    <div class="mode-option-title">PC ↔ Switch</div>
+                                    <div class="mode-option-desc">本地互转，自动去掉/加上 .sav（如潜水员戴夫）。</div>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Step 2: 填信息 -->
+                <div id="wizard-step-details" style="display:none;">
+                    <div class="mode-summary-bar">
+                        <div class="label">当前模式：<strong id="mode-summary-text">仅本地备份</strong></div>
+                        <button type="button" onclick="goWizardStep(1)">修改模式</button>
+                    </div>
+
+                    <div class="cover-layout">
+                        <div>
+                            <label style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:0.5em; font-size:0.9em; color:var(--text-soft);">
+                                <span>封面海报</span>
+                                <a href="#" id="cover-search-link" onclick="searchCoverOnline(event)" style="color:var(--accent); text-decoration:none; font-size:0.85em;">🔍 搜索封面</a>
+                            </label>
+                            <div id="cover-dropzone" class="cover-dropzone" tabindex="0" title="点击选择，或 Ctrl+V 粘贴图片">
+                                <div class="cover-placeholder" id="cover-placeholder">
+                                    <strong>Steam 风格封面</strong>
+                                    点击选图<br>或 Ctrl+V 粘贴
+                                </div>
+                                <img id="cover-preview" alt="" style="display:none;">
+                            </div>
+                            <div class="cover-actions">
+                                <button type="button" onclick="pickCoverFile()">选择</button>
+                                <button type="button" onclick="clearCover()">清除</button>
+                            </div>
+                            <input type="file" id="cover-file-input" accept="image/png,image/jpeg,image/webp,image/gif" style="display:none;" onchange="onCoverFileSelected(event)">
+                        </div>
+                        <div class="cover-fields">
+                            <form id="game-form" onsubmit="return false;">
+                                <div class="form-group">
+                                    <label>游戏名称 *</label>
+                                    <input type="text" id="game-name" required placeholder="例如：潜水员戴夫">
+                                    <div class="help-link">
+                                        <a href="https://emojidb.org/" target="_blank" rel="noopener noreferrer">🎨 挑选 Emoji</a>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label id="game-local-label">本地存档路径 *</label>
+                                    <input type="text" id="game-local-path" required placeholder="例如：C:\Users\...\SteamSData\186400536">
+                                    <div class="form-hint" id="game-local-hint">在资源管理器地址栏复制完整路径粘贴到这里。</div>
+                                </div>
+                                <div class="form-group" id="remote-fields" style="display:none;">
+                                    <label>远程存档路径</label>
+                                    <input type="text" id="game-remote-path" placeholder="例如：C:/Users/.../Saves（远程电脑上的路径）">
+                                    <div class="form-hint">填写另一台电脑上的存档文件夹路径。SSH 账号在右上角「⛓」里设置。</div>
+                                </div>
+                                <div class="form-group" id="switch-fields" style="display:none;">
+                                    <label>Switch 存档路径 *</label>
+                                    <input type="text" id="game-switch-path" placeholder="例如：从「此电脑\Switch\...\潜水员戴夫」复制路径">
+                                    <div class="form-hint">
+                                        PC → Switch：自动去掉 <code>.sav</code><br>
+                                        Switch → PC：自动加上 <code>.sav</code>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="nobackup-fields" style="display:none;">
+                                    <div class="checkbox-group">
+                                        <input type="checkbox" id="game-nobackup">
+                                        <label for="game-nobackup">跳过备份（仅同步，不创建备份）</label>
+                                    </div>
+                                </div>
+                            </form>
                         </div>
                     </div>
-                    <div class="form-group">
-                        <label>本地存档路径 *</label>
-                        <input type="text" id="game-local-path" required placeholder="例如：C:\Users\...\saves">
-                    </div>
-                    <div class="form-group">
-                        <label>远程存档路径</label>
-                        <input type="text" id="game-remote-path" placeholder="例如：/home/user/saves（可选）">
-                    </div>
-                    <div class="form-group">
-                        <div class="checkbox-group">
-                            <input type="checkbox" id="game-nobackup">
-                            <label for="game-nobackup">跳过备份（仅同步，不创建备份）</label>
-                        </div>
-                    </div>
-                </form>
+                </div>
             </div>
             <div class="modal-footer">
                 <button onclick="closeGameModal()">取消</button>
-                <button class="primary" onclick="saveGame()">保存</button>
+                <button id="wizard-back-btn" style="display:none;" onclick="goWizardStep(1)">上一步</button>
+                <button class="primary" id="wizard-next-btn" onclick="wizardNextOrSave()">下一步</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSH 设置模态框 -->
+    <div id="ssh-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>SSH 连接设置</h2>
+            </div>
+            <div class="modal-body">
+                <p class="form-hint" style="margin-top:0; margin-bottom:1em;">用于「PC ↔ 远程电脑」同步。密码留空表示不修改已保存的密码。</p>
+                <div class="form-group">
+                    <label>主机 IP / 域名 *</label>
+                    <input type="text" id="ssh-host" placeholder="例如：192.168.31.63">
+                </div>
+                <div class="form-group">
+                    <label>端口</label>
+                    <input type="number" id="ssh-port" value="22" min="1" max="65535">
+                </div>
+                <div class="form-group">
+                    <label>用户名 *</label>
+                    <input type="text" id="ssh-user" placeholder="例如：kasus">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="ssh-password" placeholder="留空则保持原密码">
+                    <div class="form-hint" id="ssh-password-hint">未设置</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="connectSSH()">打开 SSH 终端</button>
+                <button onclick="closeSshModal()">取消</button>
+                <button class="primary" onclick="saveSshSettings()">保存</button>
             </div>
         </div>
     </div>
@@ -1260,52 +2045,271 @@
               .catch(e => showToast(e.message, 'error'));
         }
 
-        // 获取游戏列表
-        async function fetchGames() {
+        async function showSshModal() {
             try {
-                const r = await fetch('/api/games');
-                if (!r.ok) throw new Error('获取游戏列表失败');
-                games = await r.json();
-                renderGameList();
+                const r = await fetch('/api/remote');
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || '读取 SSH 配置失败');
+                document.getElementById('ssh-host').value = data.host || '';
+                document.getElementById('ssh-port').value = data.port || 22;
+                document.getElementById('ssh-user').value = data.user || '';
+                document.getElementById('ssh-password').value = '';
+                document.getElementById('ssh-password-hint').textContent = data.passwordHint || '未设置';
+                document.getElementById('ssh-modal').classList.add('show');
             } catch (e) {
                 showToast(e.message, 'error');
             }
         }
 
-        // 渲染游戏列表
-        async function renderGameList() {
-            const list = document.getElementById('game-list');
-            list.innerHTML = '';
+        function closeSshModal() {
+            document.getElementById('ssh-modal').classList.remove('show');
+        }
 
-            for (const game of games) {
-                const item = document.createElement('div');
-                item.className = 'game-item';
-                if (selectedGame && selectedGame.name === game.name) {
-                    item.classList.add('selected');
+        async function saveSshSettings() {
+            const host = document.getElementById('ssh-host').value.trim();
+            const port = Number(document.getElementById('ssh-port').value) || 22;
+            const user = document.getElementById('ssh-user').value.trim();
+            const password = document.getElementById('ssh-password').value;
+            if (!host || !user) {
+                showToast('主机和用户名为必填项', 'error');
+                return;
+            }
+            try {
+                const r = await fetch('/api/remote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ host, port, user, password })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '保存失败');
+                showToast(result.message || 'SSH 配置已保存', 'success');
+                closeSshModal();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function isSwitchGame(game = selectedGame) {
+            return game && (game.syncMode === 'switch' || game.syncMode === 'switch-pc');
+        }
+
+        function isLocalGame(game = selectedGame) {
+            return game && (game.syncMode === 'local' || game.syncMode === 'backup' || game.syncMode === 'local-only');
+        }
+
+        function getGameMode(game = selectedGame) {
+            if (!game) return 'remote';
+            if (isSwitchGame(game)) return 'switch';
+            if (isLocalGame(game)) return 'local';
+            return game.syncMode || 'remote';
+        }
+
+        function modeBadgeHtml(game) {
+            const mode = getGameMode(game);
+            if (mode === 'switch') return '<span class="mode-badge switch">Switch</span>';
+            if (mode === 'local') return '<span class="mode-badge local">仅本地</span>';
+            return '<span class="mode-badge remote">远程 SSH</span>';
+        }
+
+        // 获取游戏列表
+        let renderListSeq = 0;
+
+        async function fetchGames() {
+            try {
+                const r = await fetch('/api/games');
+                if (!r.ok) throw new Error('获取游戏列表失败');
+                games = await r.json();
+                await renderGameList();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function searchCoverOnline(event) {
+            if (event) event.preventDefault();
+            const name = document.getElementById('game-name')?.value?.trim()
+                || selectedGame?.name
+                || '';
+            if (!name) {
+                showToast('请先填写游戏名称', 'error');
+                return;
+            }
+            const q = encodeURIComponent(`${name} game cover art`);
+            window.open(`https://www.google.com/search?tbm=isch&q=${q}`, '_blank', 'noopener,noreferrer');
+        }
+
+        // 封面悬停放大
+        function showCoverZoom(url, anchorEl) {
+            if (!url) return;
+            const zoom = document.getElementById('cover-zoom');
+            const img = zoom.querySelector('img');
+            img.src = url;
+            zoom.classList.add('show');
+
+            const place = () => {
+                const rect = anchorEl.getBoundingClientRect();
+                const pad = 10;
+                const zw = zoom.offsetWidth || 200;
+                const zh = zoom.offsetHeight || 260;
+                let left = rect.right + 12;
+                let top = rect.top;
+                if (left + zw > window.innerWidth - pad) {
+                    left = rect.left - zw - 12;
                 }
+                if (left < pad) left = pad;
+                if (top + zh > window.innerHeight - pad) {
+                    top = window.innerHeight - zh - pad;
+                }
+                if (top < pad) top = pad;
+                zoom.style.left = `${left}px`;
+                zoom.style.top = `${top}px`;
+            };
 
-                // 获取备份数量
-                let backupCount = 0;
+            if (img.complete) place();
+            else img.onload = place;
+            place();
+        }
+
+        function hideCoverZoom() {
+            const zoom = document.getElementById('cover-zoom');
+            zoom.classList.remove('show');
+            zoom.querySelector('img').removeAttribute('src');
+        }
+
+        let dragGameName = null;
+
+        async function saveGameOrder(orderedNames) {
+            const r = await fetch('/api/games/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: orderedNames })
+            });
+            const result = await r.json();
+            if (!r.ok) throw new Error(result.error || '排序保存失败');
+            games = result.games || games;
+        }
+
+        function collectOrderFromDom() {
+            return [...document.querySelectorAll('#game-list .game-item')]
+                .map(el => el.dataset.name)
+                .filter(Boolean);
+        }
+
+        // 渲染游戏列表（并发保护，避免保存封面后卡片翻倍）
+        async function renderGameList() {
+            const seq = ++renderListSeq;
+            const list = document.getElementById('game-list');
+
+            const counts = {};
+            await Promise.all(games.map(async (game) => {
                 try {
                     const r = await fetch(`/api/backups/${encodeURIComponent(game.name)}`);
                     if (r.ok) {
                         const data = await r.json();
-                        backupCount = data.count || 0;
+                        counts[game.name] = data.count || 0;
+                    } else {
+                        counts[game.name] = 0;
                     }
-                } catch (e) {
-                    console.error('Failed to get backup count:', e);
+                } catch {
+                    counts[game.name] = 0;
+                }
+            }));
+
+            if (seq !== renderListSeq) return;
+
+            list.innerHTML = '';
+
+            const hint = document.createElement('div');
+            hint.className = 'game-list-hint';
+            hint.textContent = '拖拽可排序 · 悬停封面可放大';
+            list.appendChild(hint);
+
+            for (const game of games) {
+                const item = document.createElement('div');
+                item.className = 'game-item';
+                item.draggable = true;
+                item.dataset.name = game.name;
+                if (selectedGame && selectedGame.name === game.name) {
+                    item.classList.add('selected');
                 }
 
+                const backupCount = counts[game.name] || 0;
+
+                const safeName = game.name.replace(/'/g, "\\'");
                 item.innerHTML = `
-                    <h3>${game.name}</h3>
-                    <div class="backup-count">${backupCount} 个备份</div>
+                    <span class="game-item-handle" title="拖动排序">⠿</span>
+                    <div class="game-item-cover-wrap">
+                        ${game.coverUrl
+                            ? `<img class="game-item-cover" src="${game.coverUrl}" alt="">`
+                            : `<div class="game-item-cover placeholder">🕹️</div>`}
+                    </div>
+                    <div class="game-item-meta">
+                        <h3>${game.name}</h3>
+                        <div class="backup-count">${backupCount} 个备份 · ${getGameMode(game) === 'switch' ? 'Switch' : getGameMode(game) === 'local' ? '仅本地' : '远程'}</div>
+                    </div>
                     <div class="game-item-actions">
-                        <button onclick="event.stopPropagation(); showEditGameModal('${game.name.replace(/'/g, "\\'")}')" title="编辑">✏️</button>
-                        <button class="danger" onclick="event.stopPropagation(); deleteGame('${game.name.replace(/'/g, "\\'")}')" title="删除">🗑️</button>
+                        <button onclick="event.stopPropagation(); showEditGameModal('${safeName}')" title="编辑">✏️</button>
+                        <button class="danger" onclick="event.stopPropagation(); deleteGame('${safeName}')" title="删除">🗑️</button>
                     </div>
                 `;
 
-                item.onclick = () => selectGame(game);
+                let suppressClick = false;
+                item.onclick = (e) => {
+                    if (e.target.closest('.game-item-actions')) return;
+                    if (suppressClick) {
+                        suppressClick = false;
+                        return;
+                    }
+                    selectGame(game);
+                };
+
+                const coverWrap = item.querySelector('.game-item-cover-wrap');
+                coverWrap.addEventListener('mouseenter', () => {
+                    if (game.coverUrl) showCoverZoom(game.coverUrl, coverWrap);
+                });
+                coverWrap.addEventListener('mouseleave', hideCoverZoom);
+
+                item.addEventListener('dragstart', (e) => {
+                    dragGameName = game.name;
+                    suppressClick = true;
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', game.name);
+                    hideCoverZoom();
+                });
+                item.addEventListener('dragend', async () => {
+                    item.classList.remove('dragging');
+                    document.querySelectorAll('.game-item.drag-target').forEach(el => el.classList.remove('drag-target'));
+                    dragGameName = null;
+                    try {
+                        const order = collectOrderFromDom();
+                        await saveGameOrder(order);
+                    } catch (err) {
+                        showToast(err.message, 'error');
+                        await fetchGames();
+                    }
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    const dragging = document.querySelector('.game-item.dragging');
+                    if (!dragging || dragging === item) return;
+                    const rect = item.getBoundingClientRect();
+                    const before = e.clientY < rect.top + rect.height / 2;
+                    if (before) {
+                        list.insertBefore(dragging, item);
+                    } else {
+                        list.insertBefore(dragging, item.nextSibling);
+                    }
+                    document.querySelectorAll('.game-item.drag-target').forEach(el => el.classList.remove('drag-target'));
+                    item.classList.add('drag-target');
+                });
+                item.addEventListener('dragleave', () => item.classList.remove('drag-target'));
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    item.classList.remove('drag-target');
+                });
+
                 list.appendChild(item);
             }
         }
@@ -1313,7 +2317,9 @@
         // 选择游戏
         function selectGame(game) {
             selectedGame = game;
-            renderGameList();
+            document.querySelectorAll('#game-list .game-item').forEach((el) => {
+                el.classList.toggle('selected', el.dataset.name === game.name);
+            });
             renderGameDetails();
         }
 
@@ -1331,6 +2337,7 @@
             }
 
             header.textContent = selectedGame.name;
+            header.innerHTML = `${selectedGame.name} ${modeBadgeHtml(selectedGame)}`;
 
             // Header action buttons
             headerActions.innerHTML = `
@@ -1389,14 +2396,48 @@
             const pageBackups = backups.slice(startIdx, startIdx + PAGE_SIZE);
 
             const currentSchedule = activeIntervals[selectedGame.name]?.minutes || 0;
-
-            body.innerHTML = `
-                <div class="section ops-card">
-                    <h3>操作</h3>
-                    <div class="button-group">
+            const mode = getGameMode(selectedGame);
+            const switchMode = mode === 'switch';
+            const localMode = mode === 'local';
+            const syncButtons = localMode ? `
+                        <button class="primary" onclick="createBackup()">新建本地备份</button>
+            ` : switchMode ? `
+                        <button onclick="performSync('push')">PC → Switch（去 .sav）</button>
+                        <button onclick="performSync('pull')">Switch → PC（加 .sav）</button>
+                        <button class="primary" onclick="createBackup()">新建本地备份</button>
+            ` : `
                         <button onclick="performSync('push')">推送到远程 🏠 → 🌐</button>
                         <button onclick="performSync('pull')">下拉到本地 🌐 → 🏠</button>
                         <button class="primary" onclick="createBackup()">新建本地备份</button>
+            `;
+
+            const heroHtml = selectedGame.coverUrl
+                ? `<div class="game-hero-wrap"><div class="game-hero" id="detail-cover"><img src="${selectedGame.coverUrl}" alt=""></div></div>`
+                : `<div class="game-hero-wrap"><div class="game-hero placeholder">🕹️</div></div>`;
+
+            function syncTypeHtml(backup) {
+                const other = switchMode ? 'Switch' : '远程';
+                const local = switchMode ? 'PC' : '本地';
+                if (backup.hasLocal && !backup.hasRemote) return `<span class="sync-type local-only"><span class="type-label">仅${local}</span></span>`;
+                if (!backup.hasLocal && backup.hasRemote) return `<span class="sync-type remote-only"><span class="type-label">仅${other}</span></span>`;
+                if (backup.hasLocal && backup.hasRemote && (backup.syncDirection === 'local-to-remote' || backup.syncDirection === 'pc-to-switch')) {
+                    return `<span class="sync-type push"><span class="type-label">${local}</span><span class="type-arrow">→</span><span class="type-label">${other}</span></span>`;
+                }
+                if (backup.hasLocal && backup.hasRemote && (backup.syncDirection === 'remote-to-local' || backup.syncDirection === 'switch-to-pc')) {
+                    return `<span class="sync-type pull"><span class="type-label">${other}</span><span class="type-arrow">→</span><span class="type-label">${local}</span></span>`;
+                }
+                if (backup.hasLocal && backup.hasRemote) {
+                    return `<span class="sync-type bi-directional"><span class="type-label">${local}</span><span class="type-arrow">⟷</span><span class="type-label">${other}</span></span>`;
+                }
+                return '';
+            }
+
+            body.innerHTML = `
+                ${heroHtml}
+                <div class="section ops-card">
+                    <h3>操作</h3>
+                    <div class="button-group">
+                        ${syncButtons}
                     </div>
                     <div class="schedule-control">
                         <label>定时备份：</label>
@@ -1444,11 +2485,7 @@
                                             <td class="backup-time">${formatTime(backup.time)}${isToday(backup.time) ? '<span class="today-tag">今天</span>' : ''}</td>
                                             <td class="backup-size">${formatSize(backup.size)}</td>
                                             <td class="backup-type">
-                                                ${backup.hasLocal && !backup.hasRemote ? '<span class="sync-type local-only"><span class="type-label">仅本地</span></span>' : ''}
-                                                ${!backup.hasLocal && backup.hasRemote ? '<span class="sync-type remote-only"><span class="type-label">仅远程</span></span>' : ''}
-                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'local-to-remote' ? '<span class="sync-type push"><span class="type-label">本地</span><span class="type-arrow">→</span><span class="type-label">远程</span></span>' : ''}
-                                                ${backup.hasLocal && backup.hasRemote && backup.syncDirection === 'remote-to-local' ? '<span class="sync-type pull"><span class="type-label">远程</span><span class="type-arrow">→</span><span class="type-label">本地</span></span>' : ''}
-                                                ${backup.hasLocal && backup.hasRemote && !backup.syncDirection ? '<span class="sync-type bi-directional"><span class="type-label">本地</span><span class="type-arrow">⟷</span><span class="type-label">远程</span></span>' : ''}
+                                                ${syncTypeHtml(backup)}
                                             </td>
                                             <td>
                                                 <div class="backup-actions">
@@ -1478,7 +2515,35 @@
                         `
                     }
                 </div>
+
+                <div class="section album-card" id="album-card">
+                    <div class="album-header">
+                        <h3>截图相册</h3>
+                        <div class="album-header-actions">
+                            <button type="button" class="album-icon-btn" title="打开截图文件夹" onclick="openAlbumFolder()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="album-toolbar">
+                        <button type="button" onclick="pickAlbumFiles()">上传</button>
+                        <button type="button" onclick="pasteAlbumFromClipboard()">粘贴</button>
+                        <span class="album-hint">支持拖入图片 · Ctrl+V</span>
+                    </div>
+                    <div class="album-drop-overlay" id="album-drop-overlay">松开以添加截图</div>
+                    <input type="file" id="album-file-input" accept="image/*" multiple style="display:none;" onchange="onAlbumFilesSelected(event)">
+                    <div id="album-grid" class="album-grid"><div class="empty-state"><p>加载中…</p></div></div>
+                </div>
             `;
+
+            const detailCover = document.getElementById('detail-cover');
+            if (detailCover && selectedGame.coverUrl) {
+                detailCover.addEventListener('mouseenter', () => showCoverZoom(selectedGame.coverUrl, detailCover));
+                detailCover.addEventListener('mouseleave', hideCoverZoom);
+            }
+
+            bindAlbumDropzone();
+            loadAlbumImages();
         }
 
         // 创建备份
@@ -1590,18 +2655,34 @@
                 <div class="settings-card" onclick="event.stopPropagation()">
                     <h3>设置</h3>
                     <div class="settings-row">
-                        <label>本地路径</label>
+                        <label>${getGameMode(selectedGame) === 'switch' ? 'PC 路径' : '本地路径'}</label>
                         <div class="mono">${selectedGame.localPath}</div>
                         <div class="btn-row">
                             <button onclick="openLocalFolder(); closePanelSettings()">打开文件夹</button>
                         </div>
                     </div>
+                    ${getGameMode(selectedGame) === 'switch' ? `
+                    <div class="settings-row">
+                        <label>Switch 路径</label>
+                        <div class="mono">${selectedGame.switchPath || '未设置'}</div>
+                        <div class="btn-row">
+                            <button onclick="openSwitchFolder(); closePanelSettings()">打开 Switch 文件夹</button>
+                        </div>
+                    </div>
+                    ` : getGameMode(selectedGame) === 'remote' ? `
                     <div class="settings-row">
                         <label>远程路径</label>
                         <div class="mono">${selectedGame.remoteFullPath || '未设置'}</div>
                     </div>
+                    ` : `
+                    <div class="settings-row">
+                        <label>模式</label>
+                        <div class="mono">仅本地备份（不同步）</div>
+                    </div>
+                    `}
                     <div class="settings-row">
                         <div class="btn-row">
+                            <button onclick="showEditGameModal(selectedGame.name); closePanelSettings()">编辑此游戏</button>
                             <button onclick="openBackupsFolder(); closePanelSettings()">打开备份文件夹</button>
                         </div>
                     </div>
@@ -1666,7 +2747,12 @@
         // 执行同步
         async function performSync(direction) {
             if (!selectedGame) return;
-            const directionText = direction === 'push' ? '推送到远程' : '下拉到本地';
+            let directionText;
+            if (isSwitchGame(selectedGame)) {
+                directionText = direction === 'push' ? 'PC → Switch' : 'Switch → PC';
+            } else {
+                directionText = direction === 'push' ? '推送到远程' : '下拉到本地';
+            }
             showToast(`${directionText}中...`, 'info');
             try {
                 const r = await fetch('/api/sync', {
@@ -1678,6 +2764,8 @@
                 if (!r.ok) throw new Error(result.message || '同步失败');
                 showToast(result.message || '同步成功', 'success');
                 await fetchGames();
+                const refreshed = games.find(g => g.name === selectedGame.name);
+                if (refreshed) selectedGame = refreshed;
                 await renderGameDetails();
             } catch (e) {
                 showToast(e.message, 'error');
@@ -1691,10 +2779,26 @@
                 const r = await fetch('/api/open-folder', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ game: selectedGame.name })
+                    body: JSON.stringify({ game: selectedGame.name, side: 'local' })
                 });
                 if (!r.ok) throw new Error('打开文件夹失败');
                 showToast('已打开本地文件夹', 'success');
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function openSwitchFolder() {
+            if (!selectedGame) return;
+            try {
+                const r = await fetch('/api/open-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: selectedGame.name, side: 'switch' })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.message || '打开文件夹失败');
+                showToast('已打开 Switch 文件夹', 'success');
             } catch (e) {
                 showToast(e.message, 'error');
             }
@@ -1719,14 +2823,486 @@
             }
         }
 
-        // 游戏管理功能
+        // —— 截图相册 ——
+        let albumImages = [];
+        let lightboxImageId = null;
+        let lightboxScale = 1;
+        let noteSaveTimer = null;
+        let lightboxBound = false;
+
+        async function loadAlbumImages() {
+            const grid = document.getElementById('album-grid');
+            if (!grid || !selectedGame) return;
+            try {
+                const r = await fetch(`/api/games/${encodeURIComponent(selectedGame.name)}/images`);
+                const data = await r.json();
+                if (!r.ok) throw new Error(data.error || '加载截图失败');
+                albumImages = data.images || [];
+                renderAlbumGrid();
+            } catch (e) {
+                grid.innerHTML = `<div class="empty-state"><p>${e.message}</p></div>`;
+            }
+        }
+
+        function renderAlbumGrid() {
+            const grid = document.getElementById('album-grid');
+            if (!grid) return;
+            if (!albumImages.length) {
+                grid.innerHTML = '<div class="empty-state"><p>暂无截图，拖入或粘贴一张试试</p></div>';
+                return;
+            }
+            grid.innerHTML = albumImages.map((img) => `
+                <div class="album-item" onclick="openLightbox('${img.id}')">
+                    <img src="${img.url}" alt="" loading="lazy">
+                    <div class="album-note">${img.note ? escapeHtml(img.note) : '<span style="opacity:.45">无备注</span>'}</div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function bindAlbumDropzone() {
+            const card = document.getElementById('album-card');
+            if (!card || card._bound) return;
+            card._bound = true;
+            let dragDepth = 0;
+
+            const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+
+            card.addEventListener('dragenter', (e) => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                dragDepth += 1;
+                card.classList.add('dragging-over');
+            });
+            card.addEventListener('dragover', (e) => {
+                if (!hasFiles(e)) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            card.addEventListener('dragleave', (e) => {
+                if (!hasFiles(e)) return;
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (dragDepth === 0) card.classList.remove('dragging-over');
+            });
+            card.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                dragDepth = 0;
+                card.classList.remove('dragging-over');
+                const files = [...(e.dataTransfer?.files || [])].filter(f => f.type.startsWith('image/'));
+                if (!files.length) {
+                    showToast('请拖入图片文件', 'error');
+                    return;
+                }
+                for (const file of files) await uploadAlbumFile(file);
+            });
+
+            // 在相册卡片内 Ctrl/Cmd+V
+            card.addEventListener('paste', async (e) => {
+                const items = e.clipboardData?.items || [];
+                for (const item of items) {
+                    if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (file) await uploadAlbumFile(file);
+                        return;
+                    }
+                }
+            });
+        }
+
+        function pickAlbumFiles() {
+            document.getElementById('album-file-input')?.click();
+        }
+
+        async function onAlbumFilesSelected(event) {
+            const files = [...(event.target.files || [])];
+            event.target.value = '';
+            for (const file of files) {
+                if (file.type.startsWith('image/')) await uploadAlbumFile(file);
+            }
+        }
+
+        async function pasteAlbumFromClipboard() {
+            try {
+                const items = await navigator.clipboard.read();
+                for (const item of items) {
+                    const type = item.types.find(t => t.startsWith('image/'));
+                    if (!type) continue;
+                    const blob = await item.getType(type);
+                    await uploadAlbumFile(new File([blob], `paste.${type.split('/')[1] || 'png'}`, { type }));
+                    return;
+                }
+                showToast('剪贴板没有图片', 'error');
+            } catch (e) {
+                showToast('无法读取剪贴板，请在相册区域 Ctrl+V', 'error');
+            }
+        }
+
+        async function openAlbumFolder() {
+            if (!selectedGame) return;
+            try {
+                const r = await fetch('/api/open-folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ game: selectedGame.name, side: 'images' })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.message || '打开失败');
+                showToast('已打开截图文件夹', 'success', true);
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function fileToDataUrl(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function uploadAlbumFile(file) {
+            if (!selectedGame) return;
+            try {
+                const dataUrl = await fileToDataUrl(file);
+                const r = await fetch(`/api/games/${encodeURIComponent(selectedGame.name)}/images`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataUrl })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '上传失败');
+                showToast('截图已添加', 'success', true);
+                await loadAlbumImages();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function bindLightboxGestures() {
+            if (lightboxBound) return;
+            lightboxBound = true;
+            const box = document.getElementById('lightbox');
+            const stage = document.getElementById('lightbox-stage');
+
+            box.addEventListener('click', (e) => {
+                if (e.target === box || e.target === stage) closeLightbox();
+            });
+
+            // 滚轮 / 触摸板捏合（通常带 ctrlKey）
+            box.addEventListener('wheel', (e) => {
+                if (!box.classList.contains('show')) return;
+                e.preventDefault();
+                const factor = e.ctrlKey ? 0.02 : 0.0015;
+                const next = lightboxScale * Math.exp(-e.deltaY * factor);
+                lightboxScale = Math.min(5, Math.max(0.25, next));
+                applyLightboxTransform();
+            }, { passive: false });
+
+            document.addEventListener('keydown', (e) => {
+                if (!box.classList.contains('show')) return;
+                if (e.key === 'Escape') closeLightbox();
+            });
+        }
+
+        function applyLightboxTransform() {
+            const el = document.getElementById('lightbox-img');
+            if (el) el.style.transform = `scale(${lightboxScale})`;
+        }
+
+        function openLightbox(imageId) {
+            bindLightboxGestures();
+            const img = albumImages.find(i => i.id === imageId);
+            if (!img) return;
+            lightboxImageId = imageId;
+            lightboxScale = 1;
+            const el = document.getElementById('lightbox-img');
+            el.src = img.url;
+            applyLightboxTransform();
+            document.getElementById('lightbox-note').value = img.note || '';
+            document.getElementById('lightbox-note-hint').textContent = '输入后自动保存';
+            document.getElementById('lightbox-note-panel').classList.remove('show');
+            document.getElementById('lightbox').classList.add('show');
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').classList.remove('show');
+            document.getElementById('lightbox-note-panel').classList.remove('show');
+            lightboxImageId = null;
+            document.getElementById('lightbox-img').removeAttribute('src');
+            if (noteSaveTimer) {
+                clearTimeout(noteSaveTimer);
+                noteSaveTimer = null;
+            }
+        }
+
+        function toggleLightboxNote(event) {
+            event.stopPropagation();
+            document.getElementById('lightbox-note-panel').classList.toggle('show');
+            if (document.getElementById('lightbox-note-panel').classList.contains('show')) {
+                document.getElementById('lightbox-note').focus();
+            }
+        }
+
+        function onLightboxNoteInput() {
+            const hint = document.getElementById('lightbox-note-hint');
+            hint.textContent = '保存中…';
+            if (noteSaveTimer) clearTimeout(noteSaveTimer);
+            noteSaveTimer = setTimeout(() => saveLightboxNote(true), 450);
+        }
+
+        async function saveLightboxNote(silent = false) {
+            if (!selectedGame || !lightboxImageId) return;
+            const note = document.getElementById('lightbox-note').value;
+            const hint = document.getElementById('lightbox-note-hint');
+            try {
+                const r = await fetch(`/api/games/${encodeURIComponent(selectedGame.name)}/images/${encodeURIComponent(lightboxImageId)}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ note })
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '保存失败');
+                const local = albumImages.find(i => i.id === lightboxImageId);
+                if (local) local.note = note;
+                renderAlbumGrid();
+                hint.textContent = '已自动保存';
+                if (!silent) showToast('备注已保存', 'success', true);
+            } catch (e) {
+                hint.textContent = '保存失败';
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteLightboxImage() {
+            if (!selectedGame || !lightboxImageId) return;
+            if (!confirm('确定删除这张截图吗？')) return;
+            try {
+                const r = await fetch(`/api/games/${encodeURIComponent(selectedGame.name)}/images/${encodeURIComponent(lightboxImageId)}`, {
+                    method: 'DELETE'
+                });
+                const result = await r.json();
+                if (!r.ok) throw new Error(result.error || '删除失败');
+                closeLightbox();
+                showToast('截图已删除', 'success');
+                await loadAlbumImages();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 游戏管理功能（向导 + 封面）
         let editingGameName = null;
+        let wizardStep = 1;
+        let pendingCoverDataUrl = null;
+        let coverCleared = false;
+        let existingCoverUrl = null;
+
+        const MODE_LABELS = {
+            local: '仅本地备份',
+            remote: 'PC ↔ 远程电脑',
+            switch: 'PC ↔ Switch'
+        };
+
+        function getSelectedSyncMode() {
+            return document.querySelector('input[name="sync-mode"]:checked')?.value || 'local';
+        }
+
+        function updateModeSummary() {
+            const mode = getSelectedSyncMode();
+            const el = document.getElementById('mode-summary-text');
+            if (el) el.textContent = MODE_LABELS[mode] || mode;
+        }
+
+        function onSyncModeChange() {
+            const mode = getSelectedSyncMode();
+            const remoteFields = document.getElementById('remote-fields');
+            const switchFields = document.getElementById('switch-fields');
+            const nobackupFields = document.getElementById('nobackup-fields');
+            const localLabel = document.getElementById('game-local-label');
+
+            if (remoteFields) remoteFields.style.display = mode === 'remote' ? 'block' : 'none';
+            if (switchFields) switchFields.style.display = mode === 'switch' ? 'block' : 'none';
+            if (nobackupFields) nobackupFields.style.display = mode === 'local' ? 'none' : 'block';
+
+            if (localLabel) {
+                if (mode === 'switch') localLabel.textContent = 'PC 存档路径 *';
+                else if (mode === 'remote') localLabel.textContent = '本地 / PC 存档路径 *';
+                else localLabel.textContent = '本地存档路径 *';
+            }
+            updateModeSummary();
+        }
+
+        function goWizardStep(step) {
+            wizardStep = step;
+            const stepMode = document.getElementById('wizard-step-mode');
+            const stepDetails = document.getElementById('wizard-step-details');
+            const backBtn = document.getElementById('wizard-back-btn');
+            const nextBtn = document.getElementById('wizard-next-btn');
+            const ind1 = document.getElementById('step-indicator-1');
+            const ind2 = document.getElementById('step-indicator-2');
+
+            if (step === 1) {
+                stepMode.style.display = 'block';
+                stepDetails.style.display = 'none';
+                backBtn.style.display = 'none';
+                nextBtn.textContent = '下一步';
+                ind1.classList.add('on');
+                ind2.classList.remove('on');
+            } else {
+                stepMode.style.display = 'none';
+                stepDetails.style.display = 'block';
+                backBtn.style.display = editingGameName ? 'none' : 'inline-block';
+                nextBtn.textContent = '保存';
+                ind1.classList.remove('on');
+                ind2.classList.add('on');
+                onSyncModeChange();
+                setTimeout(() => document.getElementById('cover-dropzone')?.focus(), 50);
+            }
+        }
+
+        function wizardNextOrSave() {
+            if (wizardStep === 1) {
+                goWizardStep(2);
+                return;
+            }
+            saveGame();
+        }
+
+        function resetCoverState() {
+            pendingCoverDataUrl = null;
+            coverCleared = false;
+            existingCoverUrl = null;
+            renderCoverPreview();
+        }
+
+        function renderCoverPreview() {
+            const img = document.getElementById('cover-preview');
+            const placeholder = document.getElementById('cover-placeholder');
+            const src = pendingCoverDataUrl || (!coverCleared ? existingCoverUrl : null);
+            if (src) {
+                img.src = src;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            } else {
+                img.removeAttribute('src');
+                img.style.display = 'none';
+                placeholder.style.display = 'block';
+            }
+        }
+
+        function setCoverFromDataUrl(dataUrl) {
+            if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+                showToast('剪贴板里没有可用图片', 'error');
+                return;
+            }
+            pendingCoverDataUrl = dataUrl;
+            coverCleared = false;
+            renderCoverPreview();
+            showToast('封面已更新', 'success', true);
+        }
+
+        function pickCoverFile() {
+            document.getElementById('cover-file-input').click();
+        }
+
+        function onCoverFileSelected(event) {
+            const file = event.target.files && event.target.files[0];
+            event.target.value = '';
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                showToast('请选择图片文件', 'error');
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => setCoverFromDataUrl(reader.result);
+            reader.readAsDataURL(file);
+        }
+
+        function clearCover() {
+            pendingCoverDataUrl = null;
+            coverCleared = true;
+            renderCoverPreview();
+        }
+
+        function bindCoverPaste() {
+            const zone = document.getElementById('cover-dropzone');
+            if (!zone || zone._coverBound) return;
+            zone._coverBound = true;
+
+            zone.addEventListener('click', () => pickCoverFile());
+
+            zone.addEventListener('paste', (e) => {
+                const items = e.clipboardData?.items || [];
+                for (const item of items) {
+                    if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => setCoverFromDataUrl(reader.result);
+                        reader.readAsDataURL(file);
+                        return;
+                    }
+                }
+            });
+
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('active');
+            });
+            zone.addEventListener('dragleave', () => zone.classList.remove('active'));
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('active');
+                const file = e.dataTransfer?.files?.[0];
+                if (!file || !file.type.startsWith('image/')) {
+                    showToast('请拖入图片文件', 'error');
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = () => setCoverFromDataUrl(reader.result);
+                reader.readAsDataURL(file);
+            });
+
+            // 全局 Ctrl+V：模态框打开且在详情步时也可粘贴
+            document.addEventListener('paste', (e) => {
+                const modal = document.getElementById('game-modal');
+                if (!modal.classList.contains('show') || wizardStep !== 2) return;
+                const items = e.clipboardData?.items || [];
+                for (const item of items) {
+                    if (item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        const file = item.getAsFile();
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => setCoverFromDataUrl(reader.result);
+                        reader.readAsDataURL(file);
+                        return;
+                    }
+                }
+            });
+        }
 
         function showAddGameModal() {
             editingGameName = null;
             document.getElementById('modal-title').textContent = '添加游戏';
             document.getElementById('game-form').reset();
+            document.querySelector('input[name="sync-mode"][value="local"]').checked = true;
+            resetCoverState();
+            onSyncModeChange();
+            goWizardStep(1);
             document.getElementById('game-modal').classList.add('show');
+            bindCoverPaste();
         }
 
         function showEditGameModal(gameName) {
@@ -1738,23 +3314,41 @@
             document.getElementById('game-name').value = game.name;
             document.getElementById('game-local-path').value = game.localPath;
             document.getElementById('game-remote-path').value = game.remoteFullPath || '';
+            document.getElementById('game-switch-path').value = game.switchPath || '';
             document.getElementById('game-nobackup').checked = game.nobackup || false;
+            const mode = getGameMode(game);
+            document.querySelector(`input[name="sync-mode"][value="${mode}"]`).checked = true;
+
+            pendingCoverDataUrl = null;
+            coverCleared = false;
+            existingCoverUrl = game.coverUrl || null;
+            renderCoverPreview();
+            onSyncModeChange();
+            goWizardStep(2);
             document.getElementById('game-modal').classList.add('show');
+            bindCoverPaste();
         }
 
         function closeGameModal() {
             document.getElementById('game-modal').classList.remove('show');
             editingGameName = null;
+            resetCoverState();
         }
 
         async function saveGame() {
             const name = document.getElementById('game-name').value.trim();
             const localPath = document.getElementById('game-local-path').value.trim();
             const remotePath = document.getElementById('game-remote-path').value.trim();
+            const switchPath = document.getElementById('game-switch-path').value.trim();
             const nobackup = document.getElementById('game-nobackup').checked;
+            const syncMode = getSelectedSyncMode();
 
             if (!name || !localPath) {
                 showToast('游戏名称和本地路径为必填项', 'error');
+                return;
+            }
+            if (syncMode === 'switch' && !switchPath) {
+                showToast('Switch 模式需要填写 Switch 存档路径', 'error');
                 return;
             }
 
@@ -1762,9 +3356,19 @@
                 const gameData = {
                     name,
                     localPath,
-                    ...(remotePath ? { remoteFullPath: remotePath } : {}),
-                    nobackup
+                    syncMode,
+                    nobackup: syncMode === 'local' ? false : nobackup
                 };
+                if (syncMode === 'switch') {
+                    gameData.switchPath = switchPath;
+                } else if (syncMode === 'remote') {
+                    gameData.remoteFullPath = remotePath || '';
+                }
+                if (pendingCoverDataUrl) {
+                    gameData.coverDataUrl = pendingCoverDataUrl;
+                } else if (coverCleared) {
+                    gameData.clearCover = true;
+                }
 
                 let url = '/api/games';
                 let method = 'POST';
@@ -1787,12 +3391,14 @@
                 closeGameModal();
                 await fetchGames();
                 
-                // 如果编辑的是当前选中的游戏，刷新详情
                 if (editingGameName && selectedGame && selectedGame.name === editingGameName) {
                     const updatedGame = games.find(g => g.name === name);
                     if (updatedGame) {
                         selectGame(updatedGame);
                     }
+                } else if (!editingGameName) {
+                    const created = games.find(g => g.name === name);
+                    if (created) selectGame(created);
                 }
             } catch (e) {
                 showToast(e.message, 'error');
@@ -1828,6 +3434,11 @@
         document.getElementById('game-modal').addEventListener('click', (e) => {
             if (e.target.id === 'game-modal') {
                 closeGameModal();
+            }
+        });
+        document.getElementById('ssh-modal').addEventListener('click', (e) => {
+            if (e.target.id === 'ssh-modal') {
+                closeSshModal();
             }
         });
 

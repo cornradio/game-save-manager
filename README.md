@@ -14,8 +14,10 @@
 
 一个基于 Node.js 的交互式 CLI + WEB工具，支持：
 - 本地与远程（SSH）之间的双向同步：本地 -> 远程、远程 -> 本地
+- **PC ↔ Switch 存档互转**（自动去掉/加上 `.sav` 后缀，适合潜水员戴夫等）
 - 仅备份本地存档（不会访问远程）
 - 同步前自动备份本地与远程存档到 `backups/` 目录
+- Web 界面可视化添加/编辑游戏、配置 SSH，无需手改 JSON
 - 自动创建本地/远程目录
 - 传输方式：
   - 默认使用 SFTP（内置库，无需外部命令，适合 Windows 双端）
@@ -39,7 +41,7 @@ npm start
 （启动game-save-manager）
 ```
 
-配置文件保存在 `data/config.json`。
+配置文件保存在 `data/config.json`（一般不用手改，用网页配置即可）。
 
 ## 使用方式
 
@@ -52,22 +54,60 @@ npm start
    - 远程 -> 本地（远程覆盖本地）
    - 仅备份本地存档（在 `backups/` 目录生成一份本地备份）
 5. 后续使用可以用 `npm start -- --web` 直接进入web界面操作（推荐）
+6. Windows 托盘模式：`npm run tray`（或 `npm start -- --tray --open`）
+   - 右下角托盘图标可：打开 Web / 打开备份文件夹 / 打开配置 / 退出
+   - 交互菜单里也可按 `T` 进入托盘模式
 
-> 填写好的内容会被存储到"\data\config.json" 也可直接修改配置文件来新增游戏条目
+### CLI 快捷键
+
+主菜单支持**直接按键**（不必再用方向键）：
+- `1`~`9` 选游戏
+- `W` 打开 Web
+- `T` 托盘模式
+- `N` 新建 / `F` 备份文件夹 / `E` 配置 / `Q` 退出
+
+### Web 推荐流程（小白）
+
+1. `npm start -- --web` 打开网页
+2. 点左下角「+ 添加游戏」
+3. 选择同步方式：
+   - **PC ↔ 远程电脑**：填 PC 路径 + 远程路径；右上角 ⛓ 填 SSH
+   - **PC ↔ Switch**：填 PC 路径 + Switch 路径（从资源管理器地址栏复制）
+4. Switch 模式下按钮为：
+   - `PC → Switch`：复制并去掉 `.sav`（`GameSave_00_GD.sav` → `GameSave_00_GD`）
+   - `Switch → PC`：复制并加上 `.sav`
+
+> 填写好的内容会被存储到 `data/config.json`，也可直接改配置文件（高级用户）
 > 
 ## 备份策略
 
-每次同步前会在 `backups/<游戏名>_<时间戳>/` 下生成：
+每次同步前会在 `backups/<游戏名>/<时间戳>/` 下生成：
 - `local/`：本地存档备份
-- `remote/`：远程存档备份
+- `remote/`：远程存档备份（Switch 模式下为 Switch 侧备份）
+
+截图相册保存在 `backups/<游戏名>/myImage/`（含图片与备注 meta.json）。
+
+启动时会自动把旧结构 `backups/<游戏名>_<时间戳>` 迁移到新结构。
 
 若远程目录不存在，仍会创建一个空目录作为备份记录；仅备份本地时，只生成 `local/`。
+
+## Switch 配置示例
+
+```json
+{
+  "name": "潜水员戴夫 Switch",
+  "syncMode": "switch",
+  "localPath": "C:\\Users\\kasus\\AppData\\LocalLow\\nexon\\DAVE THE DIVER\\SteamSData\\186400536",
+  "switchPath": "你的Switch挂载盘:\\Saves\\Installed games\\潜水员戴夫",
+  "nobackup": false
+}
+```
 
 ## 命令行参数
 用纯命令行+参数的方式创建快捷方式可以无需交互进行存档同步和备份：
 
 - `--game <游戏名称>`：按名称选择已配置的游戏。
-- `--direction <方向>`：可填 `local2remote`、`remote2local`、`backup`（分别对应“本地 -> 远程”“远程 -> 本地”“仅备份本地”）。
+- `--direction <方向>`：可填 `local2remote`、`remote2local`、`backup`（分别对应“本地 -> 远程”“远程 -> 本地”“仅备份本地”）。Switch 模式同样可用 `local2remote`/`remote2local`（PC↔Switch）。
 
 示例：
 

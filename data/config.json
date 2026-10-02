@@ -1,21 +1,26 @@
 {
   "games": [
     {
+      "name": "📂A-sync",
+      "localPath": "C:\\Users\\kasus\\Downloads\\da",
+      "remoteFullPath": "/C:/Users/kasus/Downloads/da2",
+      "nobackup": true
+    },
+    {
       "name": "⛏️ mc dungeons",
       "localPath": "C:\\Users\\kasus\\Saved Games\\Mojang Studios\\Dungeons",
       "remoteFullPath": "/C:/Users/kasus/Saved Games/Mojang Studios/Dungeons",
-      "nobackup": false
+      "nobackup": false,
+      "syncMode": "remote",
+      "coverImage": "covers/⛏️_mc_dungeons_1790873784322.png"
     },
     {
-      "name": "☢️辐射4",
+      "name": "辐射4",
       "localPath": "C:\\Users\\kasus\\Documents\\My Games\\Fallout4\\Saves",
-      "remoteFullPath": "/C:/Users/kasus/Documents/My Games/Fallout4/Saves"
-    },
-    {
-      "name": "📂A-sync",
-      "localPath": "C:\\Users\\kasus\\Downloads\\da",
-      "remoteFullPath": "/C:/Users/kasus/Downloads/da",
-      "nobackup": true
+      "remoteFullPath": "/C:/Users/kasus/Documents/My Games/Fallout4/Saves",
+      "syncMode": "remote",
+      "nobackup": false,
+      "coverImage": "covers/☢️辐射4_1790873924748.png"
     },
     {
       "name": "🛹 SessionGame",
@@ -34,10 +39,18 @@
       "localPath": "C:\\Users\\kasus\\AppData\\Roaming\\StardewValley\\Saves",
       "remoteFullPath": "/C:/Users/kasus/AppData/Roaming/StardewValley/Saves",
       "nobackup": false
+    },
+    {
+      "name": "魅魔游戏",
+      "localPath": "D:\\Pariategames\\Succubus Successor\\SuccubusSuccessor_Data\\Save",
+      "remoteFullPath": "/C:/crackbam/Succubus Successor/SuccubusSuccessor_Data/Save",
+      "nobackup": false,
+      "syncMode": "remote",
+      "coverImage": "covers/魅魔游戏_1790907611183.png"
     }
   ],
   "remote": {
-    "host": "192.168.31.61",
+    "host": "192.168.31.63",
     "port": 22,
     "user": "kasus",
     "password": "qqqq"
